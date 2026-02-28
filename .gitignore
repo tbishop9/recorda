@@ -1,6 +1,7 @@
 # Build output
 bin/
 obj/
+dist/
 
 # NuGet
 *.nupkg
@@ -18,6 +19,7 @@ project.nuget.cache
 
 # Recorded audio files
 *.wav
+*.mp3
 
 # OS
 .DS_Store

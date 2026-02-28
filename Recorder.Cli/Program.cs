@@ -62,7 +62,7 @@ void StopAndMerge()
 
     if (currentMicFile is null || currentSystemFile is null) return;
 
-    string mergedFile = currentMicFile.Replace("_mic.wav", "_merged.wav");
+    string mergedFile = currentMicFile.Replace("_mic.wav", "_recording.mp3");
     if (recorder.MicSilencePad > TimeSpan.Zero)
         Console.WriteLine($"Timing offset: mic delayed by {recorder.MicSilencePad.TotalMilliseconds:F0} ms — padding mic track.");
     else if (recorder.SystemSilencePad > TimeSpan.Zero)

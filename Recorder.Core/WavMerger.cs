@@ -1,3 +1,4 @@
+using NAudio.Lame;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
@@ -6,7 +7,7 @@ namespace Recorder.Core;
 public static class WavMerger
 {
     /// <summary>
-    /// Mixes micPath and systemPath into a single stereo WAV at outputPath.
+    /// Mixes micPath and systemPath into a single stereo MP3 at outputPath.
     /// Both inputs are normalized to the same sample rate and channel count
     /// before mixing. Optional silence pads align the tracks when the two
     /// captures started delivering audio at slightly different times.
@@ -35,8 +36,13 @@ public static class WavMerger
             sysProvider = new OffsetSampleProvider(sysProvider) { DelayBy = systemPad };
 
         var mixer = new MixingSampleProvider(new[] { micProvider, sysProvider });
+        var pcmProvider = mixer.ToWaveProvider16();
 
-        WaveFileWriter.CreateWaveFile16(outputPath, mixer);
+        using var mp3Writer = new LameMP3FileWriter(outputPath, pcmProvider.WaveFormat, LAMEPreset.STANDARD);
+        var buffer = new byte[pcmProvider.WaveFormat.AverageBytesPerSecond];
+        int read;
+        while ((read = pcmProvider.Read(buffer, 0, buffer.Length)) > 0)
+            mp3Writer.Write(buffer, 0, read);
     }
 
     private static ISampleProvider Normalize(AudioFileReader reader, int targetSampleRate, int targetChannels)

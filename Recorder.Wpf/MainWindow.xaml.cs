@@ -130,7 +130,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        string mergedFile = micFile.Replace("_mic.wav", "_merged.wav");
+        string mergedFile = micFile.Replace("_mic.wav", "_recording.mp3");
 
         try
         {
