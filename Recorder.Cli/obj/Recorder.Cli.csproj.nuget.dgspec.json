@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Jim\\Code\\recorda\\Recorder.Cli\\Recorder.Cli.csproj": {}
+    "c:\\Users\\Jim\\Code\\recorda\\Recorder.Cli\\Recorder.Cli.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Jim\\Code\\recorda\\Recorder.Cli\\Recorder.Cli.csproj": {
+    "c:\\Users\\Jim\\Code\\recorda\\Recorder.Cli\\Recorder.Cli.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Jim\\Code\\recorda\\Recorder.Cli\\Recorder.Cli.csproj",
+        "projectUniqueName": "c:\\Users\\Jim\\Code\\recorda\\Recorder.Cli\\Recorder.Cli.csproj",
         "projectName": "Recorder.Cli",
-        "projectPath": "C:\\Users\\Jim\\Code\\recorda\\Recorder.Cli\\Recorder.Cli.csproj",
+        "projectPath": "c:\\Users\\Jim\\Code\\recorda\\Recorder.Cli\\Recorder.Cli.csproj",
         "packagesPath": "C:\\Users\\Jim\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Jim\\Code\\recorda\\Recorder.Cli\\obj\\",
+        "outputPath": "c:\\Users\\Jim\\Code\\recorda\\Recorder.Cli\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Jim\\AppData\\Roaming\\NuGet\\NuGet.Config"
@@ -26,8 +26,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "C:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\Recorder.Core.csproj": {
-                "projectPath": "C:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\Recorder.Core.csproj"
+              "c:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\Recorder.Core.csproj": {
+                "projectPath": "c:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\Recorder.Core.csproj"
               }
             }
           }
@@ -66,14 +66,14 @@
         }
       }
     },
-    "C:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\Recorder.Core.csproj": {
+    "c:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\Recorder.Core.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\Recorder.Core.csproj",
+        "projectUniqueName": "c:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\Recorder.Core.csproj",
         "projectName": "Recorder.Core",
-        "projectPath": "C:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\Recorder.Core.csproj",
+        "projectPath": "c:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\Recorder.Core.csproj",
         "packagesPath": "C:\\Users\\Jim\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\obj\\",
+        "outputPath": "c:\\Users\\Jim\\Code\\recorda\\Recorder.Core\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Jim\\AppData\\Roaming\\NuGet\\NuGet.Config"

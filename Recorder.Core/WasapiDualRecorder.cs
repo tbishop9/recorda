@@ -11,6 +11,8 @@ public class WasapiDualRecorder : IDisposable
     private WasapiLoopbackCapture? _systemCapture;
     private WaveFileWriter? _micWriter;
     private WaveFileWriter? _systemWriter;
+    private MMDevice? _micDevice;
+    private MMDevice? _systemDevice;
 
     private readonly ManualResetEventSlim _micStopped = new(false);
     private readonly ManualResetEventSlim _systemStopped = new(false);
@@ -30,11 +32,50 @@ public class WasapiDualRecorder : IDisposable
     public TimeSpan MicSilencePad { get; private set; }
     public TimeSpan SystemSilencePad { get; private set; }
 
-    public void Start(string micPath, string systemPath)
+    /// <summary>Returns all active audio input (microphone) devices.</summary>
+    public static IReadOnlyList<AudioDeviceInfo> GetMicDevices()
+    {
+        using var enumerator = new MMDeviceEnumerator();
+        return enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
+            .Select(d => new AudioDeviceInfo(d.ID, d.FriendlyName))
+            .ToList();
+    }
+
+    /// <summary>Returns all active audio output (playback) devices, usable for loopback capture.</summary>
+    public static IReadOnlyList<AudioDeviceInfo> GetOutputDevices()
+    {
+        using var enumerator = new MMDeviceEnumerator();
+        return enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
+            .Select(d => new AudioDeviceInfo(d.ID, d.FriendlyName))
+            .ToList();
+    }
+
+    private static MMDevice? ResolveDevice(string? deviceId)
+    {
+        if (deviceId is null) return null;
+        try
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            return enumerator.GetDevice(deviceId);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public void Start(string micPath, string systemPath,
+                      string? micDeviceId = null, string? outputDeviceId = null)
     {
         lock (_lock)
         {
             if (IsRecording) return;
+
+            // Release any devices held from a previous recording session
+            _micDevice?.Dispose();
+            _micDevice = null;
+            _systemDevice?.Dispose();
+            _systemDevice = null;
 
             LastMicPath = micPath;
             LastSystemPath = systemPath;
@@ -47,7 +88,10 @@ public class WasapiDualRecorder : IDisposable
             _micStopped.Reset();
             _systemStopped.Reset();
 
-            _micCapture = new WasapiCapture();
+            _micDevice = ResolveDevice(micDeviceId);
+            _micCapture = _micDevice is not null
+                ? new WasapiCapture(_micDevice)
+                : new WasapiCapture();
             _micWriter = new WaveFileWriter(micPath, _micCapture.WaveFormat);
             _micCapture.DataAvailable += (s, a) =>
             {
@@ -62,7 +106,10 @@ public class WasapiDualRecorder : IDisposable
                 _micStopped.Set();
             };
 
-            _systemCapture = new WasapiLoopbackCapture();
+            _systemDevice = ResolveDevice(outputDeviceId);
+            _systemCapture = _systemDevice is not null
+                ? new WasapiLoopbackCapture(_systemDevice)
+                : new WasapiLoopbackCapture();
             _systemWriter = new WaveFileWriter(systemPath, _systemCapture.WaveFormat);
             _systemCapture.DataAvailable += (s, a) =>
             {
@@ -133,6 +180,10 @@ public class WasapiDualRecorder : IDisposable
         _micCapture = null;
         _systemCapture?.Dispose();
         _systemCapture = null;
+        _micDevice?.Dispose();
+        _micDevice = null;
+        _systemDevice?.Dispose();
+        _systemDevice = null;
         _micStopped.Dispose();
         _systemStopped.Dispose();
     }
