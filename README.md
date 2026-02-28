@@ -1,56 +1,70 @@
 # Recorda
 
-A minimal Windows console app that simultaneously records your microphone and system audio (everything you hear) into separate WAV files, then automatically merges them into a single stereo track when recording stops.
+*Because sometimes you need to capture both sides of the conversation — and your cat meowing in the background.*
+
+A Windows app that records your **microphone** and **system audio** (everything coming out of your speakers) at the same time, then squishes them into a single stereo **MP3** when you hit stop. No virtual cables, no driver voodoo — just WASAPI and a big red button (or a keyboard, if you're that kind of nerd).
+
+You get **two ways to run it**: a friendly WPF window with device pickers and a timer, or a no-nonsense console app. Same engine under the hood.
 
 ---
 
-## Requirements
+## What you need
 
-- Windows 10 or later
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- A microphone connected/enabled
-- Audio playing through your default output device for system capture to record anything
+- **Windows 10** or later
+- **[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)** (to build) or the runtime (if you're running a published build)
+- A **microphone** that Windows can see
+- Something actually **playing** through your default output if you want system audio on the recording (otherwise you'll get a very quiet system track and a lot of you)
 
 ---
 
-## Project Structure
+## Project layout
 
 ```
 recorda/
-├── CallRecorder.sln
-├── Recorder.Core/          # Class library — capture and merge logic
+├── CallRecorder.sln          # The solution (yes, the folder is "recorda" — we're not picky)
+├── Recorder.Core/            # The brain: WASAPI capture + merge-to-MP3
 │   ├── WasapiDualRecorder.cs
-│   ├── WavMerger.cs
+│   ├── WavMerger.cs          # Despite the name, it outputs MP3. Don't @ us.
+│   ├── AudioDeviceInfo.cs
 │   └── Recorder.Core.csproj
-└── Recorder.Cli/           # Console app — UI and entry point
-    ├── Program.cs
-    └── Recorder.Cli.csproj
+├── Recorder.Cli/             # Console app: R to record, Q to quit
+│   ├── Program.cs
+│   └── Recorder.Cli.csproj
+├── Recorder.Wpf/             # The pretty one: device pickers, REC button, timer, log
+│   ├── MainWindow.xaml(.cs)
+│   └── Recorder.Wpf.csproj
+└── publish.ps1               # Builds single-file exes into dist/
 ```
 
-| Project | Type | Purpose |
-|---|---|---|
-| `Recorder.Core` | Class library | Audio capture via WASAPI, WAV file merging |
-| `Recorder.Cli` | Console app | Keyboard-driven interface |
+| Project         | What it is   | What it does                                      |
+|-----------------|-------------|----------------------------------------------------|
+| **Recorder.Core** | Class lib   | Capture (WASAPI), merge, timing alignment, MP3 out |
+| **Recorder.Cli**  | Console app | Keyboard-driven: R = record/stop, Q = quit         |
+| **Recorder.Wpf**  | WPF app     | GUI: pick devices, pick folder, big REC, timer, log |
 
 ---
 
-## Building
+## Build & run
 
-From the repo root:
+**Build everything:**
 
 ```powershell
 dotnet build
 ```
 
----
+**Run the GUI (recommended for most humans):**
 
-## Running
+```powershell
+dotnet run --project Recorder.Wpf
+```
+
+**Run the CLI (for keyboard warriors):**
 
 ```powershell
 dotnet run --project Recorder.Cli
 ```
 
-Output on launch:
+You'll see something like:
 
 ```
 CallRecorder ready
@@ -58,89 +72,88 @@ Press R to start/stop recording
 Press Q to quit
 ```
 
+*(We kept the old codename in the CLI. It's nostalgic.)*
+
 ---
 
-## Usage
+## How to use it
+
+### WPF app
+
+- Choose **microphone** and **playback device** (system audio source). Hit **↻ Refresh** if you plug something in.
+- Set the **output folder** (default: `Documents\Recorda`). **Browse…** to change it, **Open ↗** to jump there in Explorer.
+- Press the big **REC** button to start. It turns red and says **STOP**; the timer counts up.
+- Press **STOP** when you're done. The app merges mic + system into one MP3, then deletes the temporary WAVs.
+- **Activity log** at the bottom: double‑click a “Saved: …” line to open that file in Explorer (or select it).
+
+### CLI
 
 | Key | Action |
-|---|---|
-| `R` | Start recording (if stopped) |
-| `R` | Stop recording and merge tracks (if recording) |
-| `Q` | Stop recording (if active), merge, then quit |
+|-----|--------|
+| **R** | Start recording (if idle) |
+| **R** | Stop recording, merge to MP3, then exit (if recording) |
+| **Q** | Stop (if recording), merge, then quit |
 
-### What happens when you press R to start
-
-Three files are created in the working directory, all sharing the same timestamp prefix:
-
-```
-2026-02-28_143045_mic.wav
-2026-02-28_143045_system.wav
-```
-
-### What happens when you press R to stop (or Q)
-
-1. Both captures are stopped and their WAV files are fully flushed to disk.
-2. The two tracks are automatically merged into:
-
-```
-2026-02-28_143045_merged.wav
-```
-
-The console prints each step:
-
-```
-Stopping recording...
-Recording stopped.
-Merging tracks -> 2026-02-28_143045_merged.wav ...
-Merged: 2026-02-28_143045_merged.wav
-```
+So: one recording per run. Press R to start, R again (or Q) to stop and get your file.
 
 ---
 
-## Output Files
+## What you get on disk
 
-| File | Contents |
-|---|---|
-| `YYYY-MM-DD_HHMMSS_mic.wav` | Raw microphone capture (device native format) |
-| `YYYY-MM-DD_HHMMSS_system.wav` | Raw system audio loopback (device native format) |
-| `YYYY-MM-DD_HHMMSS_merged.wav` | Mixed stereo 16-bit PCM WAV |
+When you stop a recording:
 
-All files are written to the directory from which you ran `dotnet run`.
+| File | What it is |
+|------|------------|
+| `YYYY-MM-DD_HHMMSS_recording.mp3` | **The one you want.** Stereo MP3: one channel from mic, one from system (mixed). LAME STANDARD preset. |
+
+The raw `_mic.wav` and `_system.wav` files are created during recording, then **deleted automatically** after a successful merge. Only the MP3 is kept.
+
+**Where files go:**
+
+- **WPF:** The folder shown in “Output folder” (default `Documents\Recorda`).
+- **CLI:** The current working directory of the process.
 
 ---
 
-## How It Works
+## Timing alignment (the boring magic)
 
-### Capture (`WasapiDualRecorder`)
+Mic and system capture don’t always start in perfect sync. The recorder measures when each stream actually starts delivering audio and, if one is late, pads it with silence so the final MP3 is aligned. You might see a log line like “mic offset +120 ms” or “no offset” — that’s just the app telling you it fixed the timing (or that no fix was needed).
 
-Both captures run simultaneously on separate WASAPI sessions:
+---
 
-- **Microphone** — uses `WasapiCapture` against the default recording device.
-- **System audio** — uses `WasapiLoopbackCapture` against the default playback device. This captures everything rendered by Windows (music, calls, browser audio, etc.) without any virtual audio cable or driver.
+## Publishing (single-file exes)
 
-Each capture writes raw PCM/IEEE-float audio directly to its WAV file via `WaveFileWriter` as data arrives. When `Stop()` is called, the app blocks until both `RecordingStopped` events have fired and both file writers have been fully flushed and closed before proceeding to the merge step.
+From the repo root:
 
-### Merging (`WavMerger`)
+```powershell
+.\publish.ps1
+```
 
-Because mic and loopback devices typically use different native formats (e.g. mic: 16-bit mono 16 kHz; loopback: 32-bit IEEE float stereo 48 kHz), both tracks are normalised to a common format before mixing:
+This builds **self-contained, single-file** exes into `dist/`:
 
-1. **Read** both files with `AudioFileReader`, which decodes any PCM/float WAV to a normalised float sample stream.
-2. **Upmix** any mono track to stereo using `MonoToStereoSampleProvider`.
-3. **Resample** to the higher of the two sample rates using `WdlResamplingSampleProvider` (Cockos WDL resampler — high quality).
-4. **Mix** both streams with `MixingSampleProvider` (sample-accurate additive mixing).
-5. **Write** the result as standard 16-bit stereo PCM WAV using `WaveFileWriter.CreateWaveFile16`.
+- `dist/Recorda.UI/Recorda.UI.exe` — the WPF app
+- `dist/Recorda.CLI/Recorda.CLI.exe` — the console app
+
+Optional: `.\publish.ps1 -Runtime win-arm64` (or another RID) if you're on something other than `win-x64`.
+
+---
+
+## How it works (short version)
+
+- **Capture:** Two WASAPI sessions: one capture on the default mic, one *loopback* on the default playback device. That loopback is what gives you “everything the system is playing” without extra drivers.
+- **Merge:** Both streams are normalized (sample rate, stereo), aligned with the silence padding above, mixed together, and encoded to MP3 with NAudio + LAME.
 
 ### Dependencies
 
-| Package | Version | Used for |
-|---|---|---|
-| [NAudio](https://github.com/naudio/NAudio) | 2.2.1 | WASAPI capture, WAV I/O, sample providers |
+| Package | Used for |
+|---------|----------|
+| [NAudio](https://github.com/naudio/NAudio) | WASAPI capture, WAV read, sample plumbing |
+| [NAudio.Lame](https://github.com/Corey-M/NAudio.Lame) | MP3 encoding |
 
 ---
 
-## Notes
+## Odds & ends
 
-- Both the individual track files and the merged file are kept after recording — delete whichever you don't need.
-- If no audio is playing through the speakers/headphones during recording, `system.wav` will be silence but the merge will still succeed.
-- The app uses the **default** Windows audio devices. To change input/output devices, set them in Windows Sound Settings before launching.
-- Running multiple instances at the same time will cause the second instance to fail to open the default mic device.
+- The app uses the **default** Windows audio devices. Change them in Windows Sound settings before starting, or in the WPF UI (mic/playback dropdowns).
+- **One instance at a time** for a given device — two instances fighting over the same default mic will end in tears.
+- If nothing is playing during recording, the system side of the MP3 will be silence; the merge still runs and you still get a valid file.
