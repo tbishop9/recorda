@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "Building solution ($Configuration)..." -ForegroundColor Cyan
 
-dotnet build CallRecorder.sln --configuration $Configuration
+dotnet build Recorda.sln --configuration $Configuration
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Build failed (exit code $LASTEXITCODE)."

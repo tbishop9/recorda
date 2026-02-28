@@ -1,7 +1,7 @@
 using System;
 using Recorder.Core;
 
-Console.WriteLine("CallRecorder ready");
+Console.WriteLine("Recorda ready");
 Console.WriteLine("Press R to start/stop recording");
 Console.WriteLine("Press Q to quit");
 

@@ -21,7 +21,7 @@ You get **two ways to run it**: a friendly WPF window with device pickers and a 
 
 ```
 recorda/
-├── CallRecorder.sln          # The solution (yes, the folder is "recorda" — we're not picky)
+├── Recorda.sln
 ├── Recorder.Core/            # The brain: WASAPI capture + merge-to-MP3
 │   ├── WasapiDualRecorder.cs
 │   ├── WavMerger.cs          # Despite the name, it outputs MP3. Don't @ us.
@@ -67,7 +67,7 @@ dotnet run --project Recorder.Cli
 You'll see something like:
 
 ```
-CallRecorder ready
+Recorda ready
 Press R to start/stop recording
 Press Q to quit
 ```
