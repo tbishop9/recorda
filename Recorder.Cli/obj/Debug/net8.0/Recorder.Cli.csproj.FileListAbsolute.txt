@@ -22,3 +22,4 @@ C:\Users\Jim\Code\recorda\Recorder.Cli\obj\Debug\net8.0\refint\Recorder.Cli.dll
 C:\Users\Jim\Code\recorda\Recorder.Cli\obj\Debug\net8.0\Recorder.Cli.pdb
 C:\Users\Jim\Code\recorda\Recorder.Cli\obj\Debug\net8.0\Recorder.Cli.genruntimeconfig.cache
 C:\Users\Jim\Code\recorda\Recorder.Cli\obj\Debug\net8.0\ref\Recorder.Cli.dll
+C:\Users\Jim\Code\recorda\Recorder.Cli\obj\Debug\net8.0\Recorder.Cli.sourcelink.json

@@ -10,3 +10,4 @@ C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\Recorder.Core.dll
 C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\refint\Recorder.Core.dll
 C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\Recorder.Core.pdb
 C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\ref\Recorder.Core.dll
+C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\Recorder.Core.sourcelink.json

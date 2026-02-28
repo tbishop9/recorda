@@ -27,6 +27,7 @@ while (true)
         if (recorder.IsRecording)
         {
             StopAndMerge();
+            break;
         }
         else
         {
@@ -49,6 +50,10 @@ while (true)
     }
 }
 
+Console.WriteLine();
+Console.Write("Press Enter to exit...");
+Console.ReadLine();
+
 void StopAndMerge()
 {
     Console.WriteLine("Stopping recording...");
@@ -58,12 +63,22 @@ void StopAndMerge()
     if (currentMicFile is null || currentSystemFile is null) return;
 
     string mergedFile = currentMicFile.Replace("_mic.wav", "_merged.wav");
+    if (recorder.MicSilencePad > TimeSpan.Zero)
+        Console.WriteLine($"Timing offset: mic delayed by {recorder.MicSilencePad.TotalMilliseconds:F0} ms — padding mic track.");
+    else if (recorder.SystemSilencePad > TimeSpan.Zero)
+        Console.WriteLine($"Timing offset: system delayed by {recorder.SystemSilencePad.TotalMilliseconds:F0} ms — padding system track.");
+    else
+        Console.WriteLine("Timing offset: none detected.");
+
     Console.WriteLine($"Merging tracks -> {mergedFile} ...");
 
     try
     {
-        WavMerger.Merge(currentMicFile, currentSystemFile, mergedFile);
+        WavMerger.Merge(currentMicFile, currentSystemFile, mergedFile, recorder.MicSilencePad, recorder.SystemSilencePad);
         Console.WriteLine($"Merged: {mergedFile}");
+
+        try { File.Delete(currentMicFile); } catch { }
+        try { File.Delete(currentSystemFile); } catch { }
     }
     catch (Exception ex)
     {

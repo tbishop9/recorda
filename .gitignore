@@ -1,0 +1,24 @@
+# Build output
+bin/
+obj/
+
+# NuGet
+*.nupkg
+*.snupkg
+project.assets.json
+project.nuget.cache
+*.nuget.dgspec.json
+.nuget/
+
+# User-specific files
+*.user
+*.suo
+.vs/
+.vscode/
+
+# Recorded audio files
+*.wav
+
+# OS
+.DS_Store
+Thumbs.db
