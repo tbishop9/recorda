@@ -1,0 +1,12 @@
+C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\Recorder.Core.csproj.AssemblyReference.cache
+C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\Recorder.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\Recorder.Core.AssemblyInfoInputs.cache
+C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\Recorder.Core.AssemblyInfo.cs
+C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\Recorder.Core.csproj.CoreCompileInputs.cache
+C:\Users\Jim\Code\recorda\Recorder.Core\bin\Debug\net8.0\Recorder.Core.deps.json
+C:\Users\Jim\Code\recorda\Recorder.Core\bin\Debug\net8.0\Recorder.Core.dll
+C:\Users\Jim\Code\recorda\Recorder.Core\bin\Debug\net8.0\Recorder.Core.pdb
+C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\Recorder.Core.dll
+C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\refint\Recorder.Core.dll
+C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\Recorder.Core.pdb
+C:\Users\Jim\Code\recorda\Recorder.Core\obj\Debug\net8.0\ref\Recorder.Core.dll

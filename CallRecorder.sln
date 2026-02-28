@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Recorder.Core", "Recorder.Core\Recorder.Core.csproj", "{BFDCEDCC-2946-4E9C-9F24-9A2AFBCDDCCD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Recorder.Cli", "Recorder.Cli\Recorder.Cli.csproj", "{3080D5E3-9BFD-4684-B5A5-2F39CA29F256}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BFDCEDCC-2946-4E9C-9F24-9A2AFBCDDCCD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BFDCEDCC-2946-4E9C-9F24-9A2AFBCDDCCD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BFDCEDCC-2946-4E9C-9F24-9A2AFBCDDCCD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BFDCEDCC-2946-4E9C-9F24-9A2AFBCDDCCD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3080D5E3-9BFD-4684-B5A5-2F39CA29F256}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3080D5E3-9BFD-4684-B5A5-2F39CA29F256}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3080D5E3-9BFD-4684-B5A5-2F39CA29F256}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3080D5E3-9BFD-4684-B5A5-2F39CA29F256}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
