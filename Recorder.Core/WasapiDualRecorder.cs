@@ -110,6 +110,16 @@ public class WasapiDualRecorder : IDisposable
             _systemCapture = _systemDevice is not null
                 ? new WasapiLoopbackCapture(_systemDevice)
                 : new WasapiLoopbackCapture();
+
+            // Some drivers return a mono mix format from GetMixFormat(). When NAudio
+            // initialises the loopback audio client with that format, Windows reconfigures
+            // the endpoint's internal mixer to mono, which is also heard in the headphones.
+            // Overriding to stereo IEEE float (the standard WASAPI shared-mode format)
+            // keeps the render pipeline stereo while still capturing a usable loopback stream.
+            var sysFmt = _systemCapture.WaveFormat;
+            if (sysFmt.Channels < 2)
+                _systemCapture.WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(sysFmt.SampleRate, 2);
+
             _systemWriter = new WaveFileWriter(systemPath, _systemCapture.WaveFormat);
             _systemCapture.DataAvailable += (s, a) =>
             {

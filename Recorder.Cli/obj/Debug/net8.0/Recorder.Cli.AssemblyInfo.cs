@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Recorder.Cli")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+002663f7539cf8b7a9e6156d00eb6893938c4774")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+492125e589740d16170730a66c99b71849e15578")]
 [assembly: System.Reflection.AssemblyProductAttribute("Recorder.Cli")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Recorder.Cli")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
