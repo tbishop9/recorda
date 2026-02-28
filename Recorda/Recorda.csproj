@@ -6,8 +6,8 @@
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>Recorder.Wpf</RootNamespace>
-    <AssemblyName>Recorder.Wpf</AssemblyName>
+    <RootNamespace>Recorda</RootNamespace>
+    <AssemblyName>Recorda</AssemblyName>
     <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
 

@@ -6,11 +6,6 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$projects = @(
-    @{ Name = "Recorder.Wpf"; Path = "Recorder.Wpf\Recorder.Wpf.csproj"; ExeName = "Recorda.UI" },
-    @{ Name = "Recorder.Cli"; Path = "Recorder.Cli\Recorder.Cli.csproj"; ExeName = "Recorda.CLI" }
-)
-
 $commonArgs = @(
     "--configuration", "Release",
     "--runtime", $Runtime,
@@ -19,33 +14,30 @@ $commonArgs = @(
     "-p:DebugType=embedded"
 )
 
-foreach ($project in $projects) {
-    $out = Join-Path $OutputDir $project.ExeName
+$out = Join-Path $OutputDir "Recorda"
 
-    if (Test-Path $out) {
-        Write-Host "Cleaning $out ..." -ForegroundColor DarkGray
-        Remove-Item -Path $out -Recurse -Force
-    }
-
-    Write-Host "Publishing $($project.Name) -> $out ..." -ForegroundColor Cyan
-
-    dotnet publish $project.Path @commonArgs --output $out
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "Publish failed for $($project.Name) (exit code $LASTEXITCODE)."
-        exit $LASTEXITCODE
-    }
-
-    # Rename the exe to the desired output name
-    $original = Get-ChildItem -Path $out -Filter "*.exe" | Select-Object -First 1
-    if ($original -and $original.BaseName -ne $project.ExeName) {
-        $renamed = Join-Path $out "$($project.ExeName).exe"
-        Move-Item -Path $original.FullName -Destination $renamed -Force
-        Write-Host "Renamed $($original.Name) -> $($project.ExeName).exe" -ForegroundColor DarkGray
-    }
-
-    Write-Host "Published $($project.Name)." -ForegroundColor Green
+if (Test-Path $out) {
+    Write-Host "Cleaning $out ..." -ForegroundColor DarkGray
+    Remove-Item -Path $out -Recurse -Force
 }
 
+Write-Host "Publishing Recorda -> $out ..." -ForegroundColor Cyan
+
+dotnet publish "Recorda\Recorda.csproj" @commonArgs --output $out
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Publish failed (exit code $LASTEXITCODE)."
+    exit $LASTEXITCODE
+}
+
+# Rename the exe to Recorda.exe if needed
+$original = Get-ChildItem -Path $out -Filter "*.exe" | Select-Object -First 1
+if ($original -and $original.BaseName -ne "Recorda") {
+    $renamed = Join-Path $out "Recorda.exe"
+    Move-Item -Path $original.FullName -Destination $renamed -Force
+    Write-Host "Renamed $($original.Name) -> Recorda.exe" -ForegroundColor DarkGray
+}
+
+Write-Host "Published Recorda." -ForegroundColor Green
 Write-Host ""
-Write-Host "All outputs written to: $(Resolve-Path $OutputDir)" -ForegroundColor Green
+Write-Host "Output written to: $(Resolve-Path $OutputDir)" -ForegroundColor Green

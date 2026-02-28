@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace Recorder.Wpf;
+namespace Recorda;
 
 public partial class App : Application
 {

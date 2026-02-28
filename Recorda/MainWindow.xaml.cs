@@ -8,7 +8,7 @@ using System.Windows.Threading;
 using Microsoft.Win32;
 using Recorder.Core;
 
-namespace Recorder.Wpf;
+namespace Recorda;
 
 public partial class MainWindow : Window
 {
