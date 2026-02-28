@@ -2,10 +2,11 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Recorda"
-        Height="660" Width="480"
-        MinHeight="520" MinWidth="400"
-        ResizeMode="CanMinimize"
+        Height="780" Width="480"
+        MinHeight="600" MinWidth="400"
+        ResizeMode="CanResize"
         FontFamily="Segoe UI"
+        Icon="icon.ico"
         WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
@@ -218,11 +219,17 @@
                              IsReadOnly="True"
                              BorderBrush="#D1D5DB"/>
 
-                    <Button x:Name="BrowseBtn"
-                            Grid.Row="1" Grid.Column="1"
-                            Style="{StaticResource UtilButton}"
-                            Content="Browse…"
-                            Click="BrowseBtn_Click"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
+                        <Button x:Name="BrowseBtn"
+                                Style="{StaticResource UtilButton}"
+                                Content="Browse…"
+                                Click="BrowseBtn_Click"/>
+                        <Button x:Name="OpenFolderBtn"
+                                Style="{StaticResource UtilButton}"
+                                Margin="6,0,0,0"
+                                Content="Open ↗"
+                                Click="OpenFolderBtn_Click"/>
+                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -257,35 +264,39 @@
                 </StackPanel>
             </Border>
 
-            <!-- ── Recordings log card ──────────────────────────────── -->
+            <!-- ── Activity log card ────────────────────────────────── -->
             <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0">
                 <DockPanel>
-                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                         <TextBlock Style="{StaticResource SectionHeader}"
                                    Margin="0"
-                                   Text="Recordings"
+                                   Text="Activity Log"
                                    VerticalAlignment="Center"/>
-                        <TextBlock Text="double-click to open in Explorer"
+                        <TextBlock Text="double-click a recording to open in Explorer"
                                    FontSize="11"
                                    Foreground="{StaticResource TextSecondary}"
                                    VerticalAlignment="Center"
                                    HorizontalAlignment="Right"/>
                     </DockPanel>
 
-                    <ListBox x:Name="LogList"
-                             BorderThickness="0"
-                             Background="Transparent"
-                             ItemContainerStyle="{StaticResource LogItem}"
-                             MouseDoubleClick="LogList_MouseDoubleClick">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}"
-                                           FontFamily="Consolas"
-                                           FontSize="12"
-                                           Foreground="{StaticResource TextPrimary}"/>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                    <Border BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="4" Background="#FAFAFA">
+                        <ListBox x:Name="LogList"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 Padding="2"
+                                 ItemContainerStyle="{StaticResource LogItem}"
+                                 MouseDoubleClick="LogList_MouseDoubleClick">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}"
+                                               FontFamily="Consolas"
+                                               FontSize="11.5"
+                                               Foreground="{StaticResource TextPrimary}"
+                                               TextWrapping="NoWrap"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
                 </DockPanel>
             </Border>
 

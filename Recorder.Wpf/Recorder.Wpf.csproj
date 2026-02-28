@@ -8,7 +8,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Recorder.Wpf</RootNamespace>
     <AssemblyName>Recorder.Wpf</AssemblyName>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="icon.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Recorder.Core\Recorder.Core.csproj" />

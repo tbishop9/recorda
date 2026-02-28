@@ -21,6 +21,12 @@ $commonArgs = @(
 
 foreach ($project in $projects) {
     $out = Join-Path $OutputDir $project.ExeName
+
+    if (Test-Path $out) {
+        Write-Host "Cleaning $out ..." -ForegroundColor DarkGray
+        Remove-Item -Path $out -Recurse -Force
+    }
+
     Write-Host "Publishing $($project.Name) -> $out ..." -ForegroundColor Cyan
 
     dotnet publish $project.Path @commonArgs --output $out

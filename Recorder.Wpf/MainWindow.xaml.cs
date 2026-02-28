@@ -24,12 +24,17 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         LogList.ItemsSource = _log;
-        OutputFolderBox.Text = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+        string defaultFolder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Recorda");
+        Directory.CreateDirectory(defaultFolder);
+        OutputFolderBox.Text = defaultFolder;
 
         _timer.Tick += (_, _) =>
             TimerText.Text = (DateTime.Now - _recordingStart).ToString(@"h\:mm\:ss");
 
         LoadDevices();
+        Log("Ready");
     }
 
     // ── Device loading ───────────────────────────────────────────────────
@@ -61,7 +66,17 @@ public partial class MainWindow : Window
             InitialDirectory = OutputFolderBox.Text
         };
         if (dialog.ShowDialog(this) == true)
+        {
             OutputFolderBox.Text = dialog.FolderName;
+            Log($"Output folder changed to: {dialog.FolderName}");
+        }
+    }
+
+    private void OpenFolderBtn_Click(object sender, RoutedEventArgs e)
+    {
+        string folder = OutputFolderBox.Text;
+        Directory.CreateDirectory(folder);
+        Process.Start("explorer.exe", $"\"{folder}\"");
     }
 
     // ── Recording ────────────────────────────────────────────────────────
@@ -96,12 +111,14 @@ public partial class MainWindow : Window
             _recordingStart = DateTime.Now;
             _timer.Start();
             SetUiState(recording: true);
+            Log($"Recording started  →  {folder}");
         }
         catch (Exception ex)
         {
             _currentMicFile    = null;
             _currentSystemFile = null;
             StatusText.Text    = $"Error: {ex.Message}";
+            Log($"Error starting recording: {ex.Message}");
         }
     }
 
@@ -111,6 +128,7 @@ public partial class MainWindow : Window
         SetUiState(recording: false);
         RecordBtn.IsEnabled = false;
         StatusText.Text     = "Stopping…";
+        Log("Recording stopped — merging audio…");
 
         string? micFile = _currentMicFile;
         string? sysFile = _currentSystemFile;
@@ -140,9 +158,17 @@ public partial class MainWindow : Window
             try { File.Delete(micFile); } catch { }
             try { File.Delete(sysFile); } catch { }
 
+            long micPadMs = (long)(_recorder.MicSilencePad.TotalMilliseconds);
+            long sysPadMs = (long)(_recorder.SystemSilencePad.TotalMilliseconds);
+            string offsetNote = micPadMs > 0
+                ? $"mic offset +{micPadMs} ms"
+                : sysPadMs > 0
+                    ? $"system offset +{sysPadMs} ms"
+                    : "no offset";
+
             Dispatcher.Invoke(() =>
             {
-                _log.Insert(0, Path.GetFileName(mergedFile));
+                Log($"Saved: {Path.GetFileName(mergedFile)}  ({offsetNote})");
                 TimerText.Text      = "0:00:00";
                 StatusText.Text     = "Ready";
                 RecordBtn.IsEnabled = true;
@@ -152,6 +178,7 @@ public partial class MainWindow : Window
         {
             Dispatcher.Invoke(() =>
             {
+                Log($"Merge failed: {ex.Message}");
                 StatusText.Text     = $"Merge failed: {ex.Message}";
                 RecordBtn.IsEnabled = true;
             });
@@ -169,13 +196,33 @@ public partial class MainWindow : Window
         OutputCombo.IsEnabled = !recording;
         RefreshBtn.IsEnabled  = !recording;
         BrowseBtn.IsEnabled   = !recording;
+        OpenFolderBtn.IsEnabled = !recording;
+    }
+
+    // ── Log helpers ──────────────────────────────────────────────────────
+
+    private void Log(string message)
+    {
+        string entry = $"[{DateTime.Now:HH:mm:ss}]  {message}";
+        if (Dispatcher.CheckAccess())
+            _log.Insert(0, entry);
+        else
+            Dispatcher.Invoke(() => _log.Insert(0, entry));
     }
 
     // ── Log interaction ──────────────────────────────────────────────────
 
     private void LogList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (LogList.SelectedItem is not string filename) return;
+        if (LogList.SelectedItem is not string entry) return;
+
+        // Entries that reference a saved file look like: "[HH:mm:ss]  Saved: filename.mp3 (…)"
+        const string savedPrefix = "Saved: ";
+        int idx = entry.IndexOf(savedPrefix, StringComparison.Ordinal);
+        if (idx < 0) return;
+
+        string rest     = entry[(idx + savedPrefix.Length)..];
+        string filename = rest.Contains("  (") ? rest[..rest.IndexOf("  (")] : rest.Trim();
 
         string fullPath = Path.Combine(OutputFolderBox.Text, filename);
         string args = File.Exists(fullPath)
