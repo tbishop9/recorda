@@ -20,19 +20,21 @@ A Windows app that records your **microphone** and **system audio** (everything 
 ```
 recorda/
 ├── Recorda.sln
+├── build.ps1                 # Quick build (Debug/Release)
+├── publish.ps1               # Single-file exe → dist/
 ├── Recorder.Core/            # The brain: WASAPI capture + merge-to-MP3
 │   ├── WasapiDualRecorder.cs
 │   ├── WavMerger.cs          # Despite the name, it outputs MP3. Don't @ us.
 │   ├── AudioDeviceInfo.cs
 │   └── Recorder.Core.csproj
-├── Recorda/                  # The app: device pickers, REC button, timer, log
-│   ├── MainWindow.xaml(.cs)
-│   └── Recorda.csproj
-└── publish.ps1               # Builds a single-file exe into dist/
+└── Recorda/                  # The app: device pickers, REC button, timer, log
+    ├── MainWindow.xaml(.cs)
+    ├── App.xaml(.cs)
+    └── Recorda.csproj
 ```
 
-| Project           | What it is  | What it does                                       |
-|-------------------|-------------|----------------------------------------------------|
+| Project         | What it is  | What it does                                       |
+|-----------------|-------------|----------------------------------------------------|
 | **Recorder.Core** | Class lib   | Capture (WASAPI), merge, timing alignment, MP3 out |
 | **Recorda**       | WPF app     | GUI: pick devices, pick folder, big REC, timer, log |
 
@@ -40,13 +42,15 @@ recorda/
 
 ## Build & run
 
-**Build everything:**
+**Build:**
 
 ```powershell
 dotnet build
 ```
 
-**Run the app:**
+Or use the helper: `.\build.ps1` (Debug by default). For a Release build: `.\build.ps1 -Configuration Release`.
+
+**Run:**
 
 ```powershell
 dotnet run --project Recorda
@@ -59,28 +63,26 @@ dotnet run --project Recorda
 - Choose **microphone** and **playback device** (system audio source). Hit **↻ Refresh** if you plug something in.
 - Set the **output folder** (default: `Documents\Recorda`). **Browse…** to change it, **Open ↗** to jump there in Explorer.
 - Press the big **REC** button to start. It turns red and says **STOP**; the timer counts up.
-- Press **STOP** when you're done. The app merges mic + system into one MP3, then deletes the temporary WAVs.
-- **Activity log** at the bottom: double‑click a "Saved: …" line to open that file in Explorer (or select it).
+- Press **STOP** when you're done. The app merges mic + system into one MP3, deletes the temporary WAVs, and leaves only the MP3 in your output folder.
+- **Activity log** at the bottom: double‑click a "Saved: …" line to open that file in Explorer (or select the folder).
 
 ---
 
 ## What you get on disk
 
-When you stop a recording:
+When you stop a recording, **only one file** appears in your output folder:
 
 | File | What it is |
 |------|------------|
-| `YYYY-MM-DD_HHMMSS_recording.mp3` | **The one you want.** Stereo MP3: one channel from mic, one from system (mixed). LAME STANDARD preset. |
+| `YYYY-MM-DD_HHMMSS_recording.mp3` | **The one you want.** Stereo MP3: mic and system mixed. LAME STANDARD preset. |
 
-The raw `_mic.wav` and `_system.wav` files are created during recording, then **deleted automatically** after a successful merge. Only the MP3 is kept.
-
-Files go to the folder shown in "Output folder" (default `Documents\Recorda`).
+The raw `_mic.wav` and `_system.wav` files are written to your **system temp folder** during recording, then **deleted automatically** after a successful merge. Your output folder never sees them — just the final MP3.
 
 ---
 
 ## Timing alignment (the boring magic)
 
-Mic and system capture don't always start in perfect sync. The recorder measures when each stream actually starts delivering audio and, if one is late, pads it with silence so the final MP3 is aligned. You might see a log line like "mic offset +120 ms" or "no offset" — that's just the app telling you it fixed the timing (or that no fix was needed).
+Mic and system capture don't always start in perfect sync. The recorder measures when each stream actually starts delivering audio and, if one is late, pads it with silence so the final MP3 is aligned. You might see a log line like "mic offset +120 ms" or "no offset" — that's the app telling you it fixed the timing (or that no fix was needed).
 
 ---
 
@@ -100,7 +102,7 @@ Optional: `.\publish.ps1 -Runtime win-arm64` (or another RID) if you're on somet
 
 ## How it works (short version)
 
-- **Capture:** Two WASAPI sessions: one capture on the default mic, one *loopback* on the default playback device. That loopback is what gives you "everything the system is playing" without extra drivers.
+- **Capture:** Two WASAPI sessions: one capture on the selected mic, one *loopback* on the selected playback device. That loopback is what gives you "everything the system is playing" without extra drivers.
 - **Merge:** Both streams are normalized (sample rate, stereo), aligned with the silence padding above, mixed together, and encoded to MP3 with NAudio + LAME.
 
 ### Dependencies
@@ -114,6 +116,7 @@ Optional: `.\publish.ps1 -Runtime win-arm64` (or another RID) if you're on somet
 
 ## Odds & ends
 
-- The app uses the **default** Windows audio devices. Change them in Windows Sound settings before starting, or use the mic/playback dropdowns in the app.
-- **One instance at a time** for a given device — two instances fighting over the same default mic will end in tears.
+- Pick your **mic and playback device** in the app dropdowns (or set Windows defaults before starting).
+- **One instance at a time** — two windows fighting over the same device will end in tears.
 - If nothing is playing during recording, the system side of the MP3 will be silence; the merge still runs and you still get a valid file.
+- **Recordings are gitignored** (`*.wav`, `*.mp3`) so you don't accidentally commit that karaoke session.
