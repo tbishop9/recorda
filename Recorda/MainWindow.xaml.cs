@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private DateTime _recordingStart;
     private string? _currentMicFile;
     private string? _currentSystemFile;
+    private string? _currentOutputFolder;
 
     public MainWindow()
     {
@@ -99,8 +100,10 @@ public partial class MainWindow : Window
         }
 
         string ts = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
-        _currentMicFile    = Path.Combine(folder, $"{ts}_mic.wav");
-        _currentSystemFile = Path.Combine(folder, $"{ts}_system.wav");
+        string tempFolder = Path.GetTempPath();
+        _currentMicFile      = Path.Combine(tempFolder, $"{ts}_mic.wav");
+        _currentSystemFile   = Path.Combine(tempFolder, $"{ts}_system.wav");
+        _currentOutputFolder = folder;
 
         string? micId    = (MicCombo.SelectedItem    as AudioDeviceInfo)?.Id;
         string? outputId = (OutputCombo.SelectedItem as AudioDeviceInfo)?.Id;
@@ -115,9 +118,10 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _currentMicFile    = null;
-            _currentSystemFile = null;
-            StatusText.Text    = $"Error: {ex.Message}";
+            _currentMicFile      = null;
+            _currentSystemFile   = null;
+            _currentOutputFolder = null;
+            StatusText.Text      = $"Error: {ex.Message}";
             Log($"Error starting recording: {ex.Message}");
         }
     }
@@ -130,25 +134,28 @@ public partial class MainWindow : Window
         StatusText.Text     = "Stopping…";
         Log("Recording stopped — merging audio…");
 
-        string? micFile = _currentMicFile;
-        string? sysFile = _currentSystemFile;
-        _currentMicFile    = null;
-        _currentSystemFile = null;
+        string? micFile      = _currentMicFile;
+        string? sysFile      = _currentSystemFile;
+        string? outputFolder = _currentOutputFolder;
+        _currentMicFile      = null;
+        _currentSystemFile   = null;
+        _currentOutputFolder = null;
 
-        Task.Run(() => FinishRecording(micFile, sysFile));
+        Task.Run(() => FinishRecording(micFile, sysFile, outputFolder));
     }
 
-    private void FinishRecording(string? micFile, string? sysFile)
+    private void FinishRecording(string? micFile, string? sysFile, string? outputFolder)
     {
         _recorder.Stop();
 
-        if (micFile is null || sysFile is null)
+        if (micFile is null || sysFile is null || outputFolder is null)
         {
             Dispatcher.Invoke(() => { RecordBtn.IsEnabled = true; StatusText.Text = "Ready"; });
             return;
         }
 
-        string mergedFile = micFile.Replace("_mic.wav", "_recording.mp3");
+        string ts = Path.GetFileName(micFile).Replace("_mic.wav", "");
+        string mergedFile = Path.Combine(outputFolder, $"{ts}_recording.mp3");
 
         try
         {
