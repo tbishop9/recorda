@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private string? _currentMicFile;
     private string? _currentSystemFile;
     private string? _currentOutputFolder;
+    private bool _isMicrophoneMuted;
 
     public MainWindow()
     {
@@ -35,6 +36,7 @@ public partial class MainWindow : Window
             TimerText.Text = (DateTime.Now - _recordingStart).ToString(@"h\:mm\:ss");
 
         LoadDevices();
+        UpdateMuteButton();
         Log("Ready");
     }
 
@@ -90,6 +92,14 @@ public partial class MainWindow : Window
             StartRecording();
     }
 
+    private void MuteMicBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_recorder.IsRecording)
+            return;
+
+        ApplyMicrophoneMute(!_isMicrophoneMuted);
+    }
+
     private void StartRecording()
     {
         string folder = OutputFolderBox.Text;
@@ -113,7 +123,9 @@ public partial class MainWindow : Window
             _recorder.Start(_currentMicFile, _currentSystemFile, micId, outputId);
             _recordingStart = DateTime.Now;
             _timer.Start();
+            _isMicrophoneMuted = false;
             SetUiState(recording: true);
+            UpdateMuteButton();
             Log($"Recording started  →  {folder}");
         }
         catch (Exception ex)
@@ -121,7 +133,9 @@ public partial class MainWindow : Window
             _currentMicFile      = null;
             _currentSystemFile   = null;
             _currentOutputFolder = null;
+            _isMicrophoneMuted   = false;
             StatusText.Text      = $"Error: {ex.Message}";
+            UpdateMuteButton();
             Log($"Error starting recording: {ex.Message}");
         }
     }
@@ -129,6 +143,9 @@ public partial class MainWindow : Window
     private void StopRecording()
     {
         _timer.Stop();
+        _recorder.SetMicrophoneMuted(false);
+        _isMicrophoneMuted = false;
+        UpdateMuteButton();
         SetUiState(recording: false);
         RecordBtn.IsEnabled = false;
         StatusText.Text     = "Stopping…";
@@ -150,7 +167,12 @@ public partial class MainWindow : Window
 
         if (micFile is null || sysFile is null || outputFolder is null)
         {
-            Dispatcher.Invoke(() => { RecordBtn.IsEnabled = true; StatusText.Text = "Ready"; });
+            Dispatcher.Invoke(() =>
+            {
+                RecordBtn.IsEnabled = true;
+                StatusText.Text = "Ready";
+                UpdateMuteButton();
+            });
             return;
         }
 
@@ -179,6 +201,7 @@ public partial class MainWindow : Window
                 TimerText.Text      = "0:00:00";
                 StatusText.Text     = "Ready";
                 RecordBtn.IsEnabled = true;
+                UpdateMuteButton();
             });
         }
         catch (Exception ex)
@@ -188,6 +211,7 @@ public partial class MainWindow : Window
                 Log($"Merge failed: {ex.Message}");
                 StatusText.Text     = $"Merge failed: {ex.Message}";
                 RecordBtn.IsEnabled = true;
+                UpdateMuteButton();
             });
         }
     }
@@ -196,14 +220,52 @@ public partial class MainWindow : Window
 
     private void SetUiState(bool recording)
     {
-        RecordBtn.Background  = (Brush)FindResource(recording ? "AccentRed" : "AccentBlue");
-        RecordBtnText.Text    = recording ? "STOP" : "REC";
-        StatusText.Text       = recording ? "Recording…" : "Ready";
-        MicCombo.IsEnabled    = !recording;
-        OutputCombo.IsEnabled = !recording;
-        RefreshBtn.IsEnabled  = !recording;
-        BrowseBtn.IsEnabled   = !recording;
+        RecordBtn.Background    = (Brush)FindResource(recording ? "AccentRed" : "AccentBlue");
+        RecordBtnText.Text      = recording ? "STOP" : "REC";
+        MicCombo.IsEnabled      = !recording;
+        OutputCombo.IsEnabled   = !recording;
+        RefreshBtn.IsEnabled    = !recording;
+        BrowseBtn.IsEnabled     = !recording;
         OpenFolderBtn.IsEnabled = !recording;
+        MuteMicBtn.IsEnabled    = recording;
+        UpdateStatusText();
+        UpdateMuteButton();
+    }
+
+    private void ApplyMicrophoneMute(bool muted)
+    {
+        _recorder.SetMicrophoneMuted(muted);
+        _isMicrophoneMuted = muted;
+        UpdateStatusText();
+        UpdateMuteButton();
+        Log(muted ? "Microphone muted." : "Microphone unmuted.");
+    }
+
+    private void UpdateStatusText()
+    {
+        if (!_recorder.IsRecording)
+        {
+            StatusText.Text = "Ready";
+            return;
+        }
+
+        StatusText.Text = _isMicrophoneMuted
+            ? "Recording… microphone muted"
+            : "Recording…";
+    }
+
+    private void UpdateMuteButton()
+    {
+        MuteMicBtn.Content = _isMicrophoneMuted ? "Unmute Mic" : "Mute Mic";
+        MuteMicBtn.Background = _isMicrophoneMuted
+            ? (Brush)FindResource("AccentRed")
+            : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F9FAFB"));
+        MuteMicBtn.BorderBrush = _isMicrophoneMuted
+            ? (Brush)FindResource("AccentRed")
+            : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#D1D5DB"));
+        MuteMicBtn.Foreground = _isMicrophoneMuted
+            ? Brushes.White
+            : (Brush)FindResource("TextPrimary");
     }
 
     // ── Log helpers ──────────────────────────────────────────────────────

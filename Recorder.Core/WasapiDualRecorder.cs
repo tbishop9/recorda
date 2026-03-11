@@ -22,8 +22,11 @@ public class WasapiDualRecorder : IDisposable
     // 0 means not yet received. Written once via Interlocked.CompareExchange.
     private long _micFirstTick;
     private long _systemFirstTick;
+    private volatile bool _isMicrophoneMuted;
+    private byte[] _silentMicBuffer = Array.Empty<byte>();
 
     public bool IsRecording { get; private set; }
+    public bool IsMicrophoneMuted => _isMicrophoneMuted;
     public string? LastMicPath { get; private set; }
     public string? LastSystemPath { get; private set; }
 
@@ -84,6 +87,8 @@ public class WasapiDualRecorder : IDisposable
             _systemFirstTick = 0;
             MicSilencePad = TimeSpan.Zero;
             SystemSilencePad = TimeSpan.Zero;
+            _isMicrophoneMuted = false;
+            _silentMicBuffer = Array.Empty<byte>();
 
             _micStopped.Reset();
             _systemStopped.Reset();
@@ -97,7 +102,17 @@ public class WasapiDualRecorder : IDisposable
             {
                 // Record the timestamp of the very first buffer only
                 Interlocked.CompareExchange(ref _micFirstTick, Stopwatch.GetTimestamp(), 0);
-                _micWriter?.Write(a.Buffer, 0, a.BytesRecorded);
+
+                if (!_isMicrophoneMuted)
+                {
+                    _micWriter?.Write(a.Buffer, 0, a.BytesRecorded);
+                    return;
+                }
+
+                if (_silentMicBuffer.Length < a.BytesRecorded)
+                    _silentMicBuffer = new byte[a.BytesRecorded];
+
+                _micWriter?.Write(_silentMicBuffer, 0, a.BytesRecorded);
             };
             _micCapture.RecordingStopped += (s, a) =>
             {
@@ -156,6 +171,11 @@ public class WasapiDualRecorder : IDisposable
         _systemStopped.Wait(TimeSpan.FromSeconds(10));
 
         ComputeSilencePads();
+    }
+
+    public void SetMicrophoneMuted(bool muted)
+    {
+        _isMicrophoneMuted = muted;
     }
 
     private void ComputeSilencePads()

@@ -237,17 +237,30 @@
             <Border Grid.Row="3" Style="{StaticResource Card}">
                 <StackPanel HorizontalAlignment="Center" Margin="0,8,0,8">
 
-                    <Button x:Name="RecordBtn"
-                            Style="{StaticResource RecordButtonStyle}"
-                            Background="{StaticResource AccentBlue}"
-                            HorizontalAlignment="Center"
-                            Click="RecordBtn_Click">
-                        <TextBlock x:Name="RecordBtnText"
-                                   Text="REC"
-                                   FontSize="17" FontWeight="Bold"
-                                   Foreground="White"
-                                   HorizontalAlignment="Center"/>
-                    </Button>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button x:Name="RecordBtn"
+                                Style="{StaticResource RecordButtonStyle}"
+                                Background="{StaticResource AccentBlue}"
+                                HorizontalAlignment="Center"
+                                Click="RecordBtn_Click">
+                            <TextBlock x:Name="RecordBtnText"
+                                       Text="REC"
+                                       FontSize="17" FontWeight="Bold"
+                                       Foreground="White"
+                                       HorizontalAlignment="Center"/>
+                        </Button>
+
+                        <Button x:Name="MuteMicBtn"
+                                Style="{StaticResource UtilButton}"
+                                Width="90"
+                                Height="90"
+                                Margin="12,0,0,0"
+                                FontSize="13"
+                                FontWeight="SemiBold"
+                                IsEnabled="False"
+                                Content="Mute Mic"
+                                Click="MuteMicBtn_Click"/>
+                    </StackPanel>
 
                     <TextBlock x:Name="TimerText"
                                Text="0:00:00"
