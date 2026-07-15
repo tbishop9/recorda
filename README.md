@@ -27,7 +27,7 @@ recorda/
 │   ├── WavMerger.cs          # Despite the name, it outputs MP3. Don't @ us.
 │   ├── AudioDeviceInfo.cs
 │   └── Recorder.Core.csproj
-└── Recorda/                  # The app: device pickers, REC button, timer, log
+└── Recorda/                  # The app: recorder console, setup, recent takes
     ├── MainWindow.xaml(.cs)
     ├── App.xaml(.cs)
     └── Recorda.csproj
@@ -36,7 +36,7 @@ recorda/
 | Project         | What it is  | What it does                                       |
 |-----------------|-------------|----------------------------------------------------|
 | **Recorder.Core** | Class lib   | Capture (WASAPI), merge, timing alignment, MP3 out |
-| **Recorda**       | WPF app     | GUI: pick devices, pick folder, big REC, timer, log |
+| **Recorda**       | WPF app     | GUI: source meters, recording controls, setup, recent takes |
 
 ---
 
@@ -60,11 +60,11 @@ dotnet run --project Recorda
 
 ## How to use it
 
-- Choose **microphone** and **playback device** (system audio source). Hit **↻ Refresh** if you plug something in.
-- Set the **output folder** (default: `Documents\Recorda`). **Browse…** to change it, **Open ↗** to jump there in Explorer.
-- Press the big **REC** button to start. It turns red and says **STOP**; the timer counts up.
+- Open **Setup** to choose the microphone, playback device, mix levels, and output folder. Recorda remembers these choices.
+- Press the large **Record** button to start. Live meters show microphone and system-audio activity.
 - Press **STOP** when you're done. The app merges mic + system into one MP3, deletes the temporary WAVs, and leaves only the MP3 in your output folder.
-- **Activity log** at the bottom: double‑click a "Saved: …" line to open that file in Explorer (or select the folder).
+- Use **Recent Takes** to play, reveal, copy the path of, or delete a recording. Detailed events remain available under **Diagnostics**.
+- Keyboard shortcuts: **Ctrl+R** records/stops, **Ctrl+M** mutes/unmutes the microphone, and **Ctrl+,** opens Setup.
 
 ---
 
@@ -76,7 +76,7 @@ When you stop a recording, **only one file** appears in your output folder:
 |------|------------|
 | `YYYY-MM-DD_HHMMSS_recording.mp3` | **The one you want.** Stereo MP3: mic and system mixed. LAME STANDARD preset. |
 
-The raw `_mic.wav` and `_system.wav` files are written to your **system temp folder** during recording, then **deleted automatically** after a successful merge. Your output folder never sees them — just the final MP3.
+Raw microphone and system WAVs are written to a unique session directory in your **system temp folder**, then deleted after a successful merge. The MP3 is first encoded as a partial file and atomically renamed when complete. If export fails, the source WAVs are preserved and their location is shown under Diagnostics.
 
 ---
 

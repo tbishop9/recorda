@@ -1,61 +1,62 @@
-using NAudio.Wave;
-using NAudio.CoreAudioApi;
+using System.Buffers.Binary;
 using System.Diagnostics;
-using System.Threading;
+using NAudio.CoreAudioApi;
+using NAudio.Wave;
 
 namespace Recorder.Core;
 
-public class WasapiDualRecorder : IDisposable
+public sealed class WasapiDualRecorder : IDisposable
 {
+    private readonly object _gate = new();
     private WasapiCapture? _micCapture;
     private WasapiLoopbackCapture? _systemCapture;
     private WaveFileWriter? _micWriter;
     private WaveFileWriter? _systemWriter;
     private MMDevice? _micDevice;
     private MMDevice? _systemDevice;
-
-    private readonly ManualResetEventSlim _micStopped = new(false);
-    private readonly ManualResetEventSlim _systemStopped = new(false);
-    private readonly object _lock = new();
-
-    // Stopwatch ticks of the first DataAvailable event for each capture.
-    // 0 means not yet received. Written once via Interlocked.CompareExchange.
+    private TaskCompletionSource _micStopped = NewCompletionSource();
+    private TaskCompletionSource _systemStopped = NewCompletionSource();
     private long _micFirstTick;
     private long _systemFirstTick;
+    private volatile bool _isRecording;
     private volatile bool _isMicrophoneMuted;
     private byte[] _silentMicBuffer = Array.Empty<byte>();
+    private float _micPeak;
+    private float _systemPeak;
+    private bool _disposed;
 
-    public bool IsRecording { get; private set; }
+    public bool IsRecording => _isRecording;
     public bool IsMicrophoneMuted => _isMicrophoneMuted;
+    public float MicrophonePeak => Math.Clamp(Volatile.Read(ref _micPeak), 0f, 1f);
+    public float SystemPeak => Math.Clamp(Volatile.Read(ref _systemPeak), 0f, 1f);
     public string? LastMicPath { get; private set; }
     public string? LastSystemPath { get; private set; }
-
-    // Set after Stop() — silence to prepend to each track before merging.
-    // Exactly one of these will always be TimeSpan.Zero.
     public TimeSpan MicSilencePad { get; private set; }
     public TimeSpan SystemSilencePad { get; private set; }
 
-    /// <summary>Returns all active audio input (microphone) devices.</summary>
-    public static IReadOnlyList<AudioDeviceInfo> GetMicDevices()
-    {
-        using var enumerator = new MMDeviceEnumerator();
-        return enumerator.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-            .Select(d => new AudioDeviceInfo(d.ID, d.FriendlyName))
-            .ToList();
-    }
+    public static IReadOnlyList<AudioDeviceInfo> GetMicDevices() => GetDevices(DataFlow.Capture);
 
-    /// <summary>Returns all active audio output (playback) devices, usable for loopback capture.</summary>
-    public static IReadOnlyList<AudioDeviceInfo> GetOutputDevices()
+    public static IReadOnlyList<AudioDeviceInfo> GetOutputDevices() => GetDevices(DataFlow.Render);
+
+    private static IReadOnlyList<AudioDeviceInfo> GetDevices(DataFlow flow)
     {
         using var enumerator = new MMDeviceEnumerator();
-        return enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-            .Select(d => new AudioDeviceInfo(d.ID, d.FriendlyName))
-            .ToList();
+        var devices = enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active);
+        var results = new List<AudioDeviceInfo>(devices.Count);
+        foreach (MMDevice device in devices)
+        {
+            using (device)
+                results.Add(new AudioDeviceInfo(device.ID, device.FriendlyName));
+        }
+
+        return results;
     }
 
     private static MMDevice? ResolveDevice(string? deviceId)
     {
-        if (deviceId is null) return null;
+        if (deviceId is null)
+            return null;
+
         try
         {
             using var enumerator = new MMDeviceEnumerator();
@@ -67,115 +68,156 @@ public class WasapiDualRecorder : IDisposable
         }
     }
 
-    public void Start(string micPath, string systemPath,
-                      string? micDeviceId = null, string? outputDeviceId = null)
+    public void Start(string micPath, string systemPath, string? micDeviceId = null, string? outputDeviceId = null)
     {
-        lock (_lock)
+        lock (_gate)
         {
-            if (IsRecording) return;
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_isRecording)
+                throw new InvalidOperationException("A recording is already in progress.");
 
-            // Release any devices held from a previous recording session
-            _micDevice?.Dispose();
-            _micDevice = null;
-            _systemDevice?.Dispose();
-            _systemDevice = null;
+            ResetSession(micPath, systemPath);
 
-            LastMicPath = micPath;
-            LastSystemPath = systemPath;
-
-            _micFirstTick = 0;
-            _systemFirstTick = 0;
-            MicSilencePad = TimeSpan.Zero;
-            SystemSilencePad = TimeSpan.Zero;
-            _isMicrophoneMuted = false;
-            _silentMicBuffer = Array.Empty<byte>();
-
-            _micStopped.Reset();
-            _systemStopped.Reset();
-
-            _micDevice = ResolveDevice(micDeviceId);
-            _micCapture = _micDevice is not null
-                ? new WasapiCapture(_micDevice)
-                : new WasapiCapture();
-            _micWriter = new WaveFileWriter(micPath, _micCapture.WaveFormat);
-            _micCapture.DataAvailable += (s, a) =>
+            try
             {
-                // Record the timestamp of the very first buffer only
-                Interlocked.CompareExchange(ref _micFirstTick, Stopwatch.GetTimestamp(), 0);
+                _micDevice = ResolveDevice(micDeviceId);
+                _micCapture = _micDevice is not null ? new WasapiCapture(_micDevice) : new WasapiCapture();
+                _micWriter = new WaveFileWriter(micPath, _micCapture.WaveFormat);
+                _micCapture.DataAvailable += MicDataAvailable;
+                _micCapture.RecordingStopped += MicRecordingStopped;
 
-                if (!_isMicrophoneMuted)
-                {
-                    _micWriter?.Write(a.Buffer, 0, a.BytesRecorded);
-                    return;
-                }
+                _systemDevice = ResolveDevice(outputDeviceId);
+                _systemCapture = _systemDevice is not null
+                    ? new WasapiLoopbackCapture(_systemDevice)
+                    : new WasapiLoopbackCapture();
 
-                if (_silentMicBuffer.Length < a.BytesRecorded)
-                    _silentMicBuffer = new byte[a.BytesRecorded];
+                var systemFormat = _systemCapture.WaveFormat;
+                if (systemFormat.Channels < 2)
+                    _systemCapture.WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(systemFormat.SampleRate, 2);
 
-                _micWriter?.Write(_silentMicBuffer, 0, a.BytesRecorded);
-            };
-            _micCapture.RecordingStopped += (s, a) =>
+                _systemWriter = new WaveFileWriter(systemPath, _systemCapture.WaveFormat);
+                _systemCapture.DataAvailable += SystemDataAvailable;
+                _systemCapture.RecordingStopped += SystemRecordingStopped;
+
+                _micCapture.StartRecording();
+                _systemCapture.StartRecording();
+                _isRecording = true;
+            }
+            catch
             {
-                _micWriter?.Dispose();
-                _micWriter = null;
-                _micStopped.Set();
-            };
-
-            _systemDevice = ResolveDevice(outputDeviceId);
-            _systemCapture = _systemDevice is not null
-                ? new WasapiLoopbackCapture(_systemDevice)
-                : new WasapiLoopbackCapture();
-
-            // Some drivers return a mono mix format from GetMixFormat(). When NAudio
-            // initialises the loopback audio client with that format, Windows reconfigures
-            // the endpoint's internal mixer to mono, which is also heard in the headphones.
-            // Overriding to stereo IEEE float (the standard WASAPI shared-mode format)
-            // keeps the render pipeline stereo while still capturing a usable loopback stream.
-            var sysFmt = _systemCapture.WaveFormat;
-            if (sysFmt.Channels < 2)
-                _systemCapture.WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(sysFmt.SampleRate, 2);
-
-            _systemWriter = new WaveFileWriter(systemPath, _systemCapture.WaveFormat);
-            _systemCapture.DataAvailable += (s, a) =>
-            {
-                Interlocked.CompareExchange(ref _systemFirstTick, Stopwatch.GetTimestamp(), 0);
-                _systemWriter?.Write(a.Buffer, 0, a.BytesRecorded);
-            };
-            _systemCapture.RecordingStopped += (s, a) =>
-            {
-                _systemWriter?.Dispose();
-                _systemWriter = null;
-                _systemStopped.Set();
-            };
-
-            _micCapture.StartRecording();
-            _systemCapture.StartRecording();
-
-            IsRecording = true;
+                AbortPartialStart();
+                TryDelete(micPath);
+                TryDelete(systemPath);
+                throw;
+            }
         }
     }
 
-    public void Stop()
+    public async Task StopAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
-        lock (_lock)
+        WasapiCapture? micCapture;
+        WasapiLoopbackCapture? systemCapture;
+        Task micStopped;
+        Task systemStopped;
+
+        lock (_gate)
         {
-            if (!IsRecording) return;
-            IsRecording = false;
+            if (!_isRecording)
+                return;
+
+            _isRecording = false;
+            micCapture = _micCapture;
+            systemCapture = _systemCapture;
+            micStopped = _micStopped.Task;
+            systemStopped = _systemStopped.Task;
         }
 
-        _micCapture?.StopRecording();
-        _systemCapture?.StopRecording();
+        Exception? stopFailure = null;
+        try { micCapture?.StopRecording(); } catch (Exception ex) { stopFailure = ex; _micStopped.TrySetResult(); }
+        try { systemCapture?.StopRecording(); } catch (Exception ex) { stopFailure ??= ex; _systemStopped.TrySetResult(); }
 
-        // Block until both WaveFileWriters have been flushed and closed
-        _micStopped.Wait(TimeSpan.FromSeconds(10));
-        _systemStopped.Wait(TimeSpan.FromSeconds(10));
+        try
+        {
+            await Task.WhenAll(micStopped, systemStopped)
+                .WaitAsync(timeout ?? TimeSpan.FromSeconds(10), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                ComputeSilencePads();
+                ReleaseSession();
+            }
+        }
 
-        ComputeSilencePads();
+        if (stopFailure is not null)
+            throw new InvalidOperationException("One or more audio devices could not be stopped cleanly.", stopFailure);
     }
 
-    public void SetMicrophoneMuted(bool muted)
+    public void SetMicrophoneMuted(bool muted) => _isMicrophoneMuted = muted;
+
+    private void ResetSession(string micPath, string systemPath)
     {
-        _isMicrophoneMuted = muted;
+        ReleaseSession();
+        LastMicPath = micPath;
+        LastSystemPath = systemPath;
+        _micFirstTick = 0;
+        _systemFirstTick = 0;
+        MicSilencePad = TimeSpan.Zero;
+        SystemSilencePad = TimeSpan.Zero;
+        _isMicrophoneMuted = false;
+        _silentMicBuffer = Array.Empty<byte>();
+        Volatile.Write(ref _micPeak, 0f);
+        Volatile.Write(ref _systemPeak, 0f);
+        _micStopped = NewCompletionSource();
+        _systemStopped = NewCompletionSource();
+    }
+
+    private void MicDataAvailable(object? sender, WaveInEventArgs args)
+    {
+        Interlocked.CompareExchange(ref _micFirstTick, Stopwatch.GetTimestamp(), 0);
+        Volatile.Write(ref _micPeak, _isMicrophoneMuted ? 0f : CalculatePeak(args.Buffer, args.BytesRecorded, _micCapture?.WaveFormat));
+
+        if (!_isMicrophoneMuted)
+        {
+            _micWriter?.Write(args.Buffer, 0, args.BytesRecorded);
+            return;
+        }
+
+        if (_silentMicBuffer.Length < args.BytesRecorded)
+            _silentMicBuffer = new byte[args.BytesRecorded];
+
+        _micWriter?.Write(_silentMicBuffer, 0, args.BytesRecorded);
+    }
+
+    private void SystemDataAvailable(object? sender, WaveInEventArgs args)
+    {
+        Interlocked.CompareExchange(ref _systemFirstTick, Stopwatch.GetTimestamp(), 0);
+        Volatile.Write(ref _systemPeak, CalculatePeak(args.Buffer, args.BytesRecorded, _systemCapture?.WaveFormat));
+        _systemWriter?.Write(args.Buffer, 0, args.BytesRecorded);
+    }
+
+    private void MicRecordingStopped(object? sender, StoppedEventArgs args)
+    {
+        try { _micWriter?.Dispose(); }
+        finally
+        {
+            _micWriter = null;
+            if (args.Exception is not null) _micStopped.TrySetException(args.Exception);
+            else _micStopped.TrySetResult();
+        }
+    }
+
+    private void SystemRecordingStopped(object? sender, StoppedEventArgs args)
+    {
+        try { _systemWriter?.Dispose(); }
+        finally
+        {
+            _systemWriter = null;
+            if (args.Exception is not null) _systemStopped.TrySetException(args.Exception);
+            else _systemStopped.TrySetResult();
+        }
     }
 
     private void ComputeSilencePads()
@@ -184,37 +226,94 @@ public class WasapiDualRecorder : IDisposable
             return;
 
         long delta = _micFirstTick - _systemFirstTick;
-        double seconds = (double)Math.Abs(delta) / Stopwatch.Frequency;
-
-        // Cap at 5s — anything larger likely indicates a measurement anomaly
-        seconds = Math.Min(seconds, 5.0);
-
-        if (delta > 0)
-        {
-            // Mic delivered its first buffer later — pad the start of mic
-            MicSilencePad = TimeSpan.FromSeconds(seconds);
-            SystemSilencePad = TimeSpan.Zero;
-        }
-        else
-        {
-            // System delivered its first buffer later — pad the start of system
-            MicSilencePad = TimeSpan.Zero;
-            SystemSilencePad = TimeSpan.FromSeconds(seconds);
-        }
+        double seconds = Math.Min((double)Math.Abs(delta) / Stopwatch.Frequency, 5.0);
+        MicSilencePad = delta > 0 ? TimeSpan.FromSeconds(seconds) : TimeSpan.Zero;
+        SystemSilencePad = delta <= 0 ? TimeSpan.FromSeconds(seconds) : TimeSpan.Zero;
     }
 
-    public void Dispose()
+    private void AbortPartialStart()
     {
-        Stop();
-        _micCapture?.Dispose();
-        _micCapture = null;
-        _systemCapture?.Dispose();
-        _systemCapture = null;
+        _isRecording = false;
+        try { _micCapture?.StopRecording(); } catch { }
+        try { _systemCapture?.StopRecording(); } catch { }
+        ReleaseSession();
+    }
+
+    private void ReleaseSession()
+    {
+        if (_micCapture is not null)
+        {
+            _micCapture.DataAvailable -= MicDataAvailable;
+            _micCapture.RecordingStopped -= MicRecordingStopped;
+            _micCapture.Dispose();
+            _micCapture = null;
+        }
+
+        if (_systemCapture is not null)
+        {
+            _systemCapture.DataAvailable -= SystemDataAvailable;
+            _systemCapture.RecordingStopped -= SystemRecordingStopped;
+            _systemCapture.Dispose();
+            _systemCapture = null;
+        }
+
+        _micWriter?.Dispose();
+        _micWriter = null;
+        _systemWriter?.Dispose();
+        _systemWriter = null;
         _micDevice?.Dispose();
         _micDevice = null;
         _systemDevice?.Dispose();
         _systemDevice = null;
-        _micStopped.Dispose();
-        _systemStopped.Dispose();
+        Volatile.Write(ref _micPeak, 0f);
+        Volatile.Write(ref _systemPeak, 0f);
+    }
+
+    private static float CalculatePeak(byte[] buffer, int count, WaveFormat? format)
+    {
+        if (format is null || count == 0)
+            return 0f;
+
+        float peak = 0f;
+        if (format.Encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32)
+        {
+            for (int index = 0; index + 4 <= count; index += 4)
+                peak = Math.Max(peak, Math.Abs(BitConverter.ToSingle(buffer, index)));
+        }
+        else if (format.BitsPerSample == 16)
+        {
+            for (int index = 0; index + 2 <= count; index += 2)
+                peak = Math.Max(peak, Math.Abs(BinaryPrimitives.ReadInt16LittleEndian(buffer.AsSpan(index, 2)) / 32768f));
+        }
+        else if (format.BitsPerSample == 32)
+        {
+            for (int index = 0; index + 4 <= count; index += 4)
+                peak = Math.Max(peak, Math.Abs(BinaryPrimitives.ReadInt32LittleEndian(buffer.AsSpan(index, 4)) / 2147483648f));
+        }
+
+        return Math.Clamp(peak, 0f, 1f);
+    }
+
+    private static TaskCompletionSource NewCompletionSource() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
+    }
+
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            _isRecording = false;
+            try { _micCapture?.StopRecording(); } catch { }
+            try { _systemCapture?.StopRecording(); } catch { }
+            ReleaseSession();
+        }
     }
 }

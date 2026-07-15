@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Recorder.Core", "Recorder.C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Recorda", "Recorda\Recorda.csproj", "{77C0BF58-3056-4234-8706-ED6653426807}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Recorder.Core.SmokeTests", "Recorder.Core.SmokeTests\Recorder.Core.SmokeTests.csproj", "{A4EF24D2-AF38-4B11-9CA3-CDF1E74A9CC1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{77C0BF58-3056-4234-8706-ED6653426807}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{77C0BF58-3056-4234-8706-ED6653426807}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{77C0BF58-3056-4234-8706-ED6653426807}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4EF24D2-AF38-4B11-9CA3-CDF1E74A9CC1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4EF24D2-AF38-4B11-9CA3-CDF1E74A9CC1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4EF24D2-AF38-4B11-9CA3-CDF1E74A9CC1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4EF24D2-AF38-4B11-9CA3-CDF1E74A9CC1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
