@@ -98,6 +98,18 @@ This builds a **self-contained, single-file** exe into `dist/Recorda/Recorda.exe
 
 Optional: `.\publish.ps1 -Runtime win-arm64` (or another RID) if you're on something other than `win-x64`.
 
+### Creating a GitHub release
+
+After committing and pushing the release code, run:
+
+```powershell
+.\release.ps1 1.6
+```
+
+This publishes the app, creates `dist/Recorda-v1.6-win-x64.zip`, creates the `v1.6` GitHub release with generated release notes, and uploads the ZIP. The script accepts either `1.6` or `v1.6` and refuses to release if the working tree is dirty or the current commit has not been pushed.
+
+On first use, install the [GitHub CLI](https://cli.github.com/) and sign in with `gh auth login`. Use `-Draft` to create a draft release, or `-Runtime win-arm64` to publish a different runtime.
+
 ---
 
 ## How it works (short version)
