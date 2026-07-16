@@ -108,8 +108,12 @@ public partial class MainWindow : Window
 
     private void GainSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (!_initializing)
-            SaveSettings();
+        if (_initializing)
+            return;
+
+        SaveSettings();
+        if (_state == RecordingState.Recording)
+            UpdateMeters(reset: false, immediate: true);
     }
 
     private async void BrowseBtn_Click(object sender, RoutedEventArgs e)
@@ -314,16 +318,18 @@ public partial class MainWindow : Window
         UpdateMeters(reset: false);
     }
 
-    private void UpdateMeters(bool reset)
+    private void UpdateMeters(bool reset, bool immediate = false)
     {
-        double mic = reset ? 0 : Math.Sqrt(_recorder.MicrophonePeak);
-        double system = reset ? 0 : Math.Sqrt(_recorder.SystemPeak);
-        MicLevelBar.Value = reset ? 0 : Math.Max(mic, MicLevelBar.Value * 0.82);
-        SystemLevelBar.Value = reset ? 0 : Math.Max(system, SystemLevelBar.Value * 0.82);
-        MicLevelText.Text = reset ? "—" : FormatDecibels(_recorder.MicrophonePeak);
-        SystemLevelText.Text = reset ? "—" : FormatDecibels(_recorder.SystemPeak);
-        MicLevelBar.Foreground = MicLevelBar.Value > 0.94 ? FindBrush("AmberBrush") : FindBrush("MeterBrush");
-        SystemLevelBar.Foreground = SystemLevelBar.Value > 0.94 ? FindBrush("AmberBrush") : FindBrush("MeterBrush");
+        double micPeak = reset ? 0 : _recorder.MicrophonePeak * MicGainSlider.Value;
+        double systemPeak = reset ? 0 : _recorder.SystemPeak * SystemGainSlider.Value;
+        double micDisplay = Math.Sqrt(micPeak);
+        double systemDisplay = Math.Sqrt(systemPeak);
+        MicLevelBar.Value = reset ? 0 : immediate ? micDisplay : Math.Max(micDisplay, MicLevelBar.Value * 0.82);
+        SystemLevelBar.Value = reset ? 0 : immediate ? systemDisplay : Math.Max(systemDisplay, SystemLevelBar.Value * 0.82);
+        MicLevelText.Text = reset ? "—" : FormatDecibels((float)micPeak);
+        SystemLevelText.Text = reset ? "—" : FormatDecibels((float)systemPeak);
+        MicLevelBar.Foreground = micPeak > 0.94 ? FindBrush("AmberBrush") : FindBrush("MeterBrush");
+        SystemLevelBar.Foreground = systemPeak > 0.94 ? FindBrush("AmberBrush") : FindBrush("MeterBrush");
     }
 
     private void SetState(RecordingState state, string status)
@@ -336,7 +342,15 @@ public partial class MainWindow : Window
 
         RecordBtn.IsEnabled = idle || recording;
         MuteMicBtn.IsEnabled = recording;
-        SetupSection.IsEnabled = idle;
+        SetupSection.IsEnabled = idle || recording;
+        MicCombo.IsEnabled = idle;
+        OutputCombo.IsEnabled = idle;
+        OutputFolderBox.IsEnabled = idle;
+        BrowseBtn.IsEnabled = idle;
+        OpenFolderBtn.IsEnabled = idle;
+        RefreshBtn.IsEnabled = idle;
+        MicGainSlider.IsEnabled = idle || recording;
+        SystemGainSlider.IsEnabled = idle || recording;
         FinalizingPanel.Visibility = finalizing ? Visibility.Visible : Visibility.Collapsed;
         if (!finalizing)
         {

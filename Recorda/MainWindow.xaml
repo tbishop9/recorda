@@ -308,12 +308,12 @@
                                     <ComboBox x:Name="OutputCombo" Grid.Row="1" Grid.Column="2" Style="{StaticResource ComboBoxInputStyle}" Height="34"
                                               Padding="8,0" DisplayMemberPath="FriendlyName" SelectionChanged="DeviceSelectionChanged"/>
 
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="MIC LEVEL" Margin="0,0,0,6"/>
-                                    <TextBlock Grid.Row="3" Grid.Column="2" Style="{StaticResource LabelStyle}" Text="SYSTEM LEVEL" Margin="0,0,0,6"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource LabelStyle}" Text="MIC MIX LEVEL" Margin="0,0,0,6"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="2" Style="{StaticResource LabelStyle}" Text="SYSTEM MIX LEVEL" Margin="0,0,0,6"/>
                                     <Slider x:Name="MicGainSlider" Grid.Row="4" Grid.Column="0" Minimum="0" Maximum="1" Value="0.72"
-                                            ValueChanged="GainSlider_ValueChanged" ToolTip="Microphone gain used in the final mix"/>
+                                            ValueChanged="GainSlider_ValueChanged" ToolTip="Final microphone mix level; reflected in the meter while recording"/>
                                     <Slider x:Name="SystemGainSlider" Grid.Row="4" Grid.Column="2" Minimum="0" Maximum="1" Value="0.72"
-                                            ValueChanged="GainSlider_ValueChanged" ToolTip="System-audio gain used in the final mix"/>
+                                            ValueChanged="GainSlider_ValueChanged" ToolTip="Final system-audio mix level; reflected in the meter while recording"/>
 
                                     <TextBlock Grid.Row="6" Grid.ColumnSpan="3" Style="{StaticResource LabelStyle}" Text="SAVE RECORDINGS TO" Margin="0,0,0,6"/>
                                     <Grid Grid.Row="7" Grid.ColumnSpan="3">
