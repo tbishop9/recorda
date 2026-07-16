@@ -147,10 +147,12 @@
                     <ControlTemplate TargetType="ProgressBar">
                         <Grid ClipToBounds="True">
                             <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
-                            <Border x:Name="PART_Indicator"
-                                    Background="{TemplateBinding Foreground}"
-                                    CornerRadius="3"
-                                    HorizontalAlignment="Left"/>
+                            <Grid x:Name="PART_Track" ClipToBounds="True">
+                                <Border x:Name="PART_Indicator"
+                                        Background="{TemplateBinding Foreground}"
+                                        CornerRadius="3"
+                                        HorizontalAlignment="Left"/>
+                            </Grid>
                         </Grid>
                     </ControlTemplate>
                 </Setter.Value>
