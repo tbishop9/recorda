@@ -30,6 +30,7 @@ public partial class MainWindow : Window
     private string? _currentMicFile;
     private string? _currentSystemFile;
     private string? _currentOutputFolder;
+    private FailedExport? _lastFailedExport;
     private bool _isMicrophoneMuted;
     private bool _initializing = true;
     private bool _allowClose;
@@ -54,6 +55,7 @@ public partial class MainWindow : Window
 
         EnsureDirectory(OutputFolderBox.Text);
         CleanAbandonedSessions();
+        _recorder.DeviceLost += Recorder_DeviceLost;
         _uiTimer.Tick += UiTimer_Tick;
         Loaded += async (_, _) =>
         {
@@ -157,6 +159,7 @@ public partial class MainWindow : Window
         }
 
         string folder = OutputFolderBox.Text;
+        _lastFailedExport = null;
         try
         {
             EnsureDirectory(folder);
@@ -238,39 +241,34 @@ public partial class MainWindow : Window
         CancellationToken cancellationToken)
     {
         string? partialFile = null;
+        string? finalFile = null;
+        TimeSpan micPad = TimeSpan.Zero;
+        TimeSpan systemPad = TimeSpan.Zero;
         try
         {
-            await _recorder.StopAsync(cancellationToken: cancellationToken);
             if (micFile is null || systemFile is null || outputFolder is null)
                 throw new InvalidOperationException("The recording session did not contain valid output paths.");
 
-            string finalFile = CreateUniqueOutputPath(outputFolder, DateTime.Now);
+            // Computed before stopping the devices so that even an unexpected failure inside
+            // StopAsync still leaves us with enough information to offer a retry.
+            finalFile = CreateUniqueOutputPath(outputFolder, DateTime.Now);
             partialFile = finalFile + ".partial";
-            SetState(RecordingState.Finalizing, "Encoding the final MP3…");
-            FinalizingText.Text = "ENCODING  0%";
 
-            var progress = new Progress<double>(value =>
-            {
-                FinalizingProgress.Value = value;
-                FinalizingText.Text = $"ENCODING  {value:P0}";
-            });
+            RecorderStopResult stopResult = await _recorder.StopAsync(cancellationToken: cancellationToken);
+            if (stopResult.MicFailure is not null)
+                Log($"Microphone disconnected during recording; audio captured before the drop is preserved ({stopResult.MicFailure.Message}).");
+            if (stopResult.SystemFailure is not null)
+                Log($"System audio device disconnected during recording; audio captured before the drop is preserved ({stopResult.SystemFailure.Message}).");
 
-            TimeSpan micPad = _recorder.MicSilencePad;
-            TimeSpan systemPad = _recorder.SystemSilencePad;
-            await Task.Run(() => WavMerger.Merge(
-                micFile,
-                systemFile,
-                partialFile,
-                micPad,
-                systemPad,
-                micGain,
-                systemGain,
-                progress,
-                cancellationToken), cancellationToken);
+            micPad = _recorder.MicSilencePad;
+            systemPad = _recorder.SystemSilencePad;
+
+            await RunMergeAsync(micFile, systemFile, partialFile, micPad, systemPad, micGain, systemGain, cancellationToken);
 
             File.Move(partialFile, finalFile);
             partialFile = null;
             TryDeleteDirectory(sessionDirectory);
+            _lastFailedExport = null;
 
             _recordings.Insert(0, RecordingItem.FromFile(finalFile, duration));
             TrimRecentRecordings();
@@ -286,16 +284,157 @@ public partial class MainWindow : Window
         catch (OperationCanceledException)
         {
             TryDeleteFile(partialFile);
-            SetState(RecordingState.Error, "Export was cancelled. The source audio is preserved in diagnostics.");
+            bool canRetry = RememberFailedExport(micFile, systemFile, sessionDirectory, finalFile, duration, micGain, systemGain, micPad, systemPad);
+            SetState(RecordingState.Error, canRetry
+                ? "Export was cancelled. The source audio is preserved — use Retry to finish exporting."
+                : "Export was cancelled. The source audio is preserved in diagnostics.");
             Log($"Export cancelled; source audio remains in {sessionDirectory}");
         }
         catch (Exception ex)
         {
             TryDeleteFile(partialFile);
-            SetState(RecordingState.Error, "Export failed. The source audio has been preserved.");
+            bool canRetry = RememberFailedExport(micFile, systemFile, sessionDirectory, finalFile, duration, micGain, systemGain, micPad, systemPad);
+            SetState(RecordingState.Error, canRetry
+                ? "Export failed. The source audio has been preserved — use Retry to try again."
+                : "Export failed. The source audio has been preserved.");
             Log($"Export failed: {ex.Message}. Source: {sessionDirectory}");
         }
     }
+
+    private Task RunMergeAsync(
+        string micFile,
+        string systemFile,
+        string partialFile,
+        TimeSpan micPad,
+        TimeSpan systemPad,
+        float micGain,
+        float systemGain,
+        CancellationToken cancellationToken)
+    {
+        SetState(RecordingState.Finalizing, "Encoding the final MP3…");
+        FinalizingText.Text = "ENCODING  0%";
+
+        var progress = new Progress<double>(value =>
+        {
+            FinalizingProgress.Value = value;
+            FinalizingText.Text = $"ENCODING  {value:P0}";
+        });
+
+        return Task.Run(() => WavMerger.Merge(
+            micFile,
+            systemFile,
+            partialFile,
+            micPad,
+            systemPad,
+            micGain,
+            systemGain,
+            progress,
+            cancellationToken), cancellationToken);
+    }
+
+    /// <summary>
+    /// Records what's needed to retry a failed mixdown without re-recording, as long as the
+    /// source audio is still on disk. Returns false (and clears any prior pending retry) if
+    /// there isn't enough information to safely retry.
+    /// </summary>
+    private bool RememberFailedExport(
+        string? micFile,
+        string? systemFile,
+        string? sessionDirectory,
+        string? finalFile,
+        TimeSpan duration,
+        float micGain,
+        float systemGain,
+        TimeSpan micPad,
+        TimeSpan systemPad)
+    {
+        if (micFile is null || systemFile is null || sessionDirectory is null || finalFile is null ||
+            !File.Exists(micFile) || !File.Exists(systemFile))
+        {
+            _lastFailedExport = null;
+            return false;
+        }
+
+        _lastFailedExport = new FailedExport(micFile, systemFile, sessionDirectory, finalFile, duration, micGain, systemGain, micPad, systemPad);
+        return true;
+    }
+
+    private async void RetryBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_finalizeTask is not null || _lastFailedExport is null)
+            return;
+
+        FailedExport pending = _lastFailedExport;
+        _finalizeCancellation = new CancellationTokenSource();
+        _finalizeTask = RetryExportAsync(pending, _finalizeCancellation.Token);
+
+        try
+        {
+            await _finalizeTask;
+        }
+        finally
+        {
+            _finalizeTask = null;
+            _finalizeCancellation?.Dispose();
+            _finalizeCancellation = null;
+        }
+    }
+
+    private async Task RetryExportAsync(FailedExport pending, CancellationToken cancellationToken)
+    {
+        string partialFile = pending.FinalFile + ".partial";
+        try
+        {
+            Log("Retrying export from the preserved source audio…");
+            await RunMergeAsync(pending.MicFile, pending.SystemFile, partialFile, pending.MicPad, pending.SystemPad,
+                pending.MicGain, pending.SystemGain, cancellationToken);
+
+            File.Move(partialFile, pending.FinalFile);
+            TryDeleteDirectory(pending.SessionDirectory);
+            _lastFailedExport = null;
+
+            _recordings.Insert(0, RecordingItem.FromFile(pending.FinalFile, pending.Duration));
+            TrimRecentRecordings();
+            UpdateEmptyRecordingsState();
+
+            TimerText.Text = "00:00:00";
+            SetState(RecordingState.Idle, $"Saved {Path.GetFileName(pending.FinalFile)}");
+            Log($"Saved: {pending.FinalFile} (retry)");
+        }
+        catch (OperationCanceledException)
+        {
+            TryDeleteFile(partialFile);
+            SetState(RecordingState.Error, "Retry was cancelled. The source audio is still preserved — use Retry to try again.");
+            Log($"Retry cancelled; source audio remains in {pending.SessionDirectory}");
+        }
+        catch (Exception ex)
+        {
+            TryDeleteFile(partialFile);
+            SetState(RecordingState.Error, "Retry failed. The source audio has been preserved — use Retry to try again.");
+            Log($"Retry failed: {ex.Message}. Source: {pending.SessionDirectory}");
+        }
+    }
+
+    private void Recorder_DeviceLost(object? sender, DeviceLostEventArgs e)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            Log($"⚠ {e.Source} disconnected — recording continues without it ({e.Exception.Message}).");
+            if (_state == RecordingState.Recording)
+                StatusText.Text = $"{e.Source} disconnected. Recording continues — reconnect it, or stop whenever you're ready.";
+        });
+    }
+
+    private sealed record FailedExport(
+        string MicFile,
+        string SystemFile,
+        string SessionDirectory,
+        string FinalFile,
+        TimeSpan Duration,
+        float MicGain,
+        float SystemGain,
+        TimeSpan MicPad,
+        TimeSpan SystemPad);
 
     private void MuteMicBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -341,6 +480,10 @@ public partial class MainWindow : Window
         bool finalizing = state == RecordingState.Finalizing;
 
         RecordBtn.IsEnabled = idle || recording;
+        RetryBtn.Visibility = state == RecordingState.Error && _lastFailedExport is not null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        RetryBtn.IsEnabled = idle;
         MuteMicBtn.IsEnabled = recording;
         SetupSection.IsEnabled = idle || recording;
         MicCombo.IsEnabled = idle;

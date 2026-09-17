@@ -270,6 +270,11 @@
                                                 Height="40" Margin="0,9,0,0" IsEnabled="False" Padding="8,6"
                                                 Content="MUTE MIC" Click="MuteMicBtn_Click"
                                                 automation:AutomationProperties.Name="Mute microphone" ToolTip="Mute microphone (Ctrl+M)"/>
+                                        <Button x:Name="RetryBtn" Style="{StaticResource ButtonStyle}"
+                                                Height="40" Margin="0,9,0,0" Padding="8,6" Visibility="Collapsed"
+                                                Content="RETRY EXPORT" Click="RetryBtn_Click"
+                                                automation:AutomationProperties.Name="Retry export"
+                                                ToolTip="Re-run the mixdown from the preserved recording, without recording again"/>
                                     </StackPanel>
                                 </Grid>
 

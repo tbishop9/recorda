@@ -33,6 +33,15 @@ public sealed class WasapiDualRecorder : IDisposable
     public string? LastSystemPath { get; private set; }
     public TimeSpan MicSilencePad { get; private set; }
     public TimeSpan SystemSilencePad { get; private set; }
+    private Exception? _micFailure;
+    private Exception? _systemFailure;
+
+    /// <summary>
+    /// Fired the moment a capture device drops out (e.g. Bluetooth headphones disconnecting)
+    /// while recording is still in progress. Recording continues on the surviving device;
+    /// this is purely a heads-up so the UI can warn the user before they hit Stop.
+    /// </summary>
+    public event EventHandler<DeviceLostEventArgs>? DeviceLost;
 
     public static IReadOnlyList<AudioDeviceInfo> GetMicDevices() => GetDevices(DataFlow.Capture);
 
@@ -113,7 +122,7 @@ public sealed class WasapiDualRecorder : IDisposable
         }
     }
 
-    public async Task StopAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+    public async Task<RecorderStopResult> StopAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
         WasapiCapture? micCapture;
         WasapiLoopbackCapture? systemCapture;
@@ -123,7 +132,7 @@ public sealed class WasapiDualRecorder : IDisposable
         lock (_gate)
         {
             if (!_isRecording)
-                return;
+                return RecorderStopResult.None;
 
             _isRecording = false;
             micCapture = _micCapture;
@@ -132,15 +141,29 @@ public sealed class WasapiDualRecorder : IDisposable
             systemStopped = _systemStopped.Task;
         }
 
-        Exception? stopFailure = null;
-        try { micCapture?.StopRecording(); } catch (Exception ex) { stopFailure = ex; _micStopped.TrySetResult(); }
-        try { systemCapture?.StopRecording(); } catch (Exception ex) { stopFailure ??= ex; _systemStopped.TrySetResult(); }
+        try { micCapture?.StopRecording(); } catch (Exception ex) { _micFailure ??= ex; _micStopped.TrySetResult(); }
+        try { systemCapture?.StopRecording(); } catch (Exception ex) { _systemFailure ??= ex; _systemStopped.TrySetResult(); }
 
+        Exception? unexpected = null;
         try
         {
             await Task.WhenAll(micStopped, systemStopped)
                 .WaitAsync(timeout ?? TimeSpan.FromSeconds(10), cancellationToken)
                 .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw; // caller-driven cancellation should still propagate
+        }
+        catch (Exception ex)
+        {
+            // A device fault (e.g. AUDCLNT_E_DEVICE_INVALIDATED from a disconnected Bluetooth
+            // headset) is already captured in _micFailure/_systemFailure via TrySetResult above,
+            // and whatever audio each track managed to record is safely on disk - so a known
+            // device fault should never block the caller from attempting the mixdown. Anything
+            // else here (e.g. a genuine stop timeout) is unexpected and should still surface.
+            if (_micFailure is null && _systemFailure is null)
+                unexpected = ex;
         }
         finally
         {
@@ -151,8 +174,10 @@ public sealed class WasapiDualRecorder : IDisposable
             }
         }
 
-        if (stopFailure is not null)
-            throw new InvalidOperationException("One or more audio devices could not be stopped cleanly.", stopFailure);
+        if (unexpected is not null)
+            throw new InvalidOperationException("One or more audio devices could not be stopped cleanly.", unexpected);
+
+        return new RecorderStopResult(_micFailure, _systemFailure);
     }
 
     public void SetMicrophoneMuted(bool muted) => _isMicrophoneMuted = muted;
@@ -170,6 +195,8 @@ public sealed class WasapiDualRecorder : IDisposable
         _silentMicBuffer = Array.Empty<byte>();
         Volatile.Write(ref _micPeak, 0f);
         Volatile.Write(ref _systemPeak, 0f);
+        _micFailure = null;
+        _systemFailure = null;
         _micStopped = NewCompletionSource();
         _systemStopped = NewCompletionSource();
     }
@@ -204,8 +231,19 @@ public sealed class WasapiDualRecorder : IDisposable
         finally
         {
             _micWriter = null;
-            if (args.Exception is not null) _micStopped.TrySetException(args.Exception);
-            else _micStopped.TrySetResult();
+            if (args.Exception is not null)
+            {
+                _micFailure = args.Exception;
+                // If we're still meant to be recording, the device dropped out on its own
+                // (e.g. Bluetooth headset disconnected) rather than us calling StopRecording().
+                // Warn the caller immediately instead of only surfacing this at export time.
+                if (_isRecording)
+                    DeviceLost?.Invoke(this, new DeviceLostEventArgs("Microphone", args.Exception));
+            }
+
+            // Always resolve successfully: the audio captured so far is already flushed to
+            // disk above, and a device fault here should never fault the whole stop sequence.
+            _micStopped.TrySetResult();
         }
     }
 
@@ -215,8 +253,14 @@ public sealed class WasapiDualRecorder : IDisposable
         finally
         {
             _systemWriter = null;
-            if (args.Exception is not null) _systemStopped.TrySetException(args.Exception);
-            else _systemStopped.TrySetResult();
+            if (args.Exception is not null)
+            {
+                _systemFailure = args.Exception;
+                if (_isRecording)
+                    DeviceLost?.Invoke(this, new DeviceLostEventArgs("System audio", args.Exception));
+            }
+
+            _systemStopped.TrySetResult();
         }
     }
 
