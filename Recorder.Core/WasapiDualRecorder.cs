@@ -16,8 +16,9 @@ public sealed class WasapiDualRecorder : IDisposable
     private MMDevice? _systemDevice;
     private TaskCompletionSource _micStopped = NewCompletionSource();
     private TaskCompletionSource _systemStopped = NewCompletionSource();
-    private long _micFirstTick;
-    private long _systemFirstTick;
+    private long _startTick;
+    private long _micBytesWritten;
+    private long _systemBytesWritten;
     private volatile bool _isRecording;
     private volatile bool _isMicrophoneMuted;
     private byte[] _silentMicBuffer = Array.Empty<byte>();
@@ -108,6 +109,7 @@ public sealed class WasapiDualRecorder : IDisposable
                 _systemCapture.DataAvailable += SystemDataAvailable;
                 _systemCapture.RecordingStopped += SystemRecordingStopped;
 
+                _startTick = Stopwatch.GetTimestamp();
                 _micCapture.StartRecording();
                 _systemCapture.StartRecording();
                 _isRecording = true;
@@ -169,7 +171,6 @@ public sealed class WasapiDualRecorder : IDisposable
         {
             lock (_gate)
             {
-                ComputeSilencePads();
                 ReleaseSession();
             }
         }
@@ -187,8 +188,8 @@ public sealed class WasapiDualRecorder : IDisposable
         ReleaseSession();
         LastMicPath = micPath;
         LastSystemPath = systemPath;
-        _micFirstTick = 0;
-        _systemFirstTick = 0;
+        _micBytesWritten = 0;
+        _systemBytesWritten = 0;
         MicSilencePad = TimeSpan.Zero;
         SystemSilencePad = TimeSpan.Zero;
         _isMicrophoneMuted = false;
@@ -203,12 +204,13 @@ public sealed class WasapiDualRecorder : IDisposable
 
     private void MicDataAvailable(object? sender, WaveInEventArgs args)
     {
-        Interlocked.CompareExchange(ref _micFirstTick, Stopwatch.GetTimestamp(), 0);
+        FillGap(_micWriter, ref _micBytesWritten, args.BytesRecorded);
         Volatile.Write(ref _micPeak, _isMicrophoneMuted ? 0f : CalculatePeak(args.Buffer, args.BytesRecorded, _micCapture?.WaveFormat));
 
         if (!_isMicrophoneMuted)
         {
             _micWriter?.Write(args.Buffer, 0, args.BytesRecorded);
+            _micBytesWritten += args.BytesRecorded;
             return;
         }
 
@@ -216,13 +218,37 @@ public sealed class WasapiDualRecorder : IDisposable
             _silentMicBuffer = new byte[args.BytesRecorded];
 
         _micWriter?.Write(_silentMicBuffer, 0, args.BytesRecorded);
+        _micBytesWritten += args.BytesRecorded;
     }
 
     private void SystemDataAvailable(object? sender, WaveInEventArgs args)
     {
-        Interlocked.CompareExchange(ref _systemFirstTick, Stopwatch.GetTimestamp(), 0);
+        FillGap(_systemWriter, ref _systemBytesWritten, args.BytesRecorded);
         Volatile.Write(ref _systemPeak, CalculatePeak(args.Buffer, args.BytesRecorded, _systemCapture?.WaveFormat));
         _systemWriter?.Write(args.Buffer, 0, args.BytesRecorded);
+        _systemBytesWritten += args.BytesRecorded;
+    }
+
+    // WASAPI loopback delivers no packets while nothing is playing, and capture devices start
+    // late, so a track's byte count falls behind the wall clock. Both tracks are padded with
+    // silence to a shared clock (this chunk ends "now") so they stay aligned in the mixdown.
+    private void FillGap(WaveFileWriter? writer, ref long bytesWritten, int incomingBytes)
+    {
+        if (writer is null)
+            return;
+
+        WaveFormat format = writer.WaveFormat;
+        double elapsed = (double)(Stopwatch.GetTimestamp() - _startTick) / Stopwatch.Frequency;
+        long expected = (long)(elapsed * format.AverageBytesPerSecond) - incomingBytes;
+        long gap = expected - bytesWritten;
+        if (gap < format.AverageBytesPerSecond / 10)
+            return;
+
+        gap -= gap % format.BlockAlign;
+        var silence = new byte[Math.Min(gap, 1 << 20)];
+        for (long remaining = gap; remaining > 0; remaining -= silence.Length)
+            writer.Write(silence, 0, (int)Math.Min(silence.Length, remaining));
+        bytesWritten += gap;
     }
 
     private void MicRecordingStopped(object? sender, StoppedEventArgs args)
@@ -262,17 +288,6 @@ public sealed class WasapiDualRecorder : IDisposable
 
             _systemStopped.TrySetResult();
         }
-    }
-
-    private void ComputeSilencePads()
-    {
-        if (_micFirstTick == 0 || _systemFirstTick == 0)
-            return;
-
-        long delta = _micFirstTick - _systemFirstTick;
-        double seconds = Math.Min((double)Math.Abs(delta) / Stopwatch.Frequency, 5.0);
-        MicSilencePad = delta > 0 ? TimeSpan.FromSeconds(seconds) : TimeSpan.Zero;
-        SystemSilencePad = delta <= 0 ? TimeSpan.FromSeconds(seconds) : TimeSpan.Zero;
     }
 
     private void AbortPartialStart()
