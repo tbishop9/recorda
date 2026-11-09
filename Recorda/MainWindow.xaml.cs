@@ -63,8 +63,42 @@ public partial class MainWindow : Window
             _initializing = false;
             await ReloadRecordingsAsync();
             Log("Ready");
+            await CheckForUpdateAsync();
         };
         SetState(RecordingState.Starting, "Loading audio devices…");
+    }
+
+    private async Task CheckForUpdateAsync()
+    {
+        Updater.CleanupOldFiles();
+        if (Updater.IsDevBuild)
+            return;
+
+        try
+        {
+            UpdateInfo? update = await Updater.CheckAsync();
+            if (update is null || _state != RecordingState.Idle)
+                return;
+
+            Log($"Update available: {update.Tag}");
+            var answer = MessageBox.Show(this,
+                $"Recorda {update.Tag} is available (you have {Updater.CurrentVersion.ToString(3)}). Update and restart now?",
+                "Recorda update", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (answer != MessageBoxResult.Yes || _state != RecordingState.Idle)
+                return;
+
+            SetState(RecordingState.Starting, $"Downloading {update.Tag}…");
+            await Updater.InstallAsync(update);
+            Updater.Restart();
+            _allowClose = true;
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            Log($"Update check failed: {ex.Message}");
+            if (_state == RecordingState.Starting)
+                SetState(RecordingState.Idle, "Choose Record when you’re ready.");
+        }
     }
 
     private async Task LoadDevicesAsync()

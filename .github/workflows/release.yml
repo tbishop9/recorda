@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Compute next version
+        id: version
+        shell: pwsh
+        run: |
+          # Next minor after the highest vMAJOR.MINOR tag (v2.5 -> v2.6).
+          $latest = git tag --list 'v*' |
+            Where-Object { $_ -match '^v\d+\.\d+(\.\d+)?$' } |
+            ForEach-Object { [version]$_.Substring(1) } |
+            Sort-Object -Descending |
+            Select-Object -First 1
+          if (-not $latest) { $latest = [version]'1.0' }
+          $next = "{0}.{1}" -f $latest.Major, ($latest.Minor + 1)
+          "version=$next" >> $env:GITHUB_OUTPUT
+          "tag=v$next" >> $env:GITHUB_OUTPUT
+
+      - name: Publish
+        shell: pwsh
+        run: ./publish.ps1 -Version "${{ steps.version.outputs.version }}.0"
+
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path dist/Recorda/* -DestinationPath "dist/Recorda-${{ steps.version.outputs.tag }}-win-x64.zip" -CompressionLevel Optimal
+
+      - name: Create release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${{ steps.version.outputs.tag }}"
+          "dist/Recorda-${{ steps.version.outputs.tag }}-win-x64.zip"
+          --target "${{ github.sha }}"
+          --title "Recorda ${{ steps.version.outputs.tag }}"
+          --generate-notes

@@ -98,7 +98,11 @@ This builds a **self-contained, single-file** exe into `dist/Recorda/Recorda.exe
 
 Optional: `.\publish.ps1 -Runtime win-arm64` (or another RID) if you're on something other than `win-x64`.
 
-### Creating a GitHub release
+### Automatic releases and updates
+
+Every push to `main` (except Markdown-only changes) runs `.github/workflows/release.yml`, which bumps the minor version from the latest `vX.Y` tag (v2.5 → v2.6), publishes, and creates a GitHub release with the ZIP. The version is stamped into the exe. On launch, Recorda checks the latest release and offers to download it and restart. Local builds (version 1.0.0) skip the check. The repo must be public for the app to read releases.
+
+### Creating a GitHub release manually
 
 After committing and pushing the release code, run:
 

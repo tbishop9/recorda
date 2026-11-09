@@ -10,6 +10,15 @@ public partial class App : Application
     {
         const string mutexName = @"Local\Recorda-2E4930DE-5CB7-47B6-A1ED-27C52B04D03F";
         _singleInstanceMutex = new Mutex(initiallyOwned: true, mutexName, out bool createdNew);
+
+        // After an update the previous instance is still shutting down; give it time to release the mutex.
+        for (int attempt = 0; !createdNew && e.Args.Contains("--restarted") && attempt < 20; attempt++)
+        {
+            _singleInstanceMutex.Dispose();
+            Thread.Sleep(500);
+            _singleInstanceMutex = new Mutex(initiallyOwned: true, mutexName, out createdNew);
+        }
+
         if (!createdNew)
         {
             _singleInstanceMutex.Dispose();

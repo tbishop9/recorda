@@ -1,6 +1,7 @@
 param(
     [string]$Runtime = "win-x64",
-    [string]$OutputDir = "dist"
+    [string]$OutputDir = "dist",
+    [string]$Version
 )
 
 Set-StrictMode -Version Latest
@@ -13,6 +14,10 @@ $commonArgs = @(
     "-p:PublishSingleFile=true",
     "-p:DebugType=embedded"
 )
+
+if ($Version) {
+    $commonArgs += "-p:Version=$Version"
+}
 
 $out = Join-Path $OutputDir "Recorda"
 

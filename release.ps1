@@ -78,7 +78,7 @@ try {
         throw "Tag '$tag' already exists on origin. Choose a new version."
     }
 
-    & (Join-Path $repoRoot "publish.ps1") -Runtime $Runtime -OutputDir $OutputDir
+    & (Join-Path $repoRoot "publish.ps1") -Runtime $Runtime -OutputDir $OutputDir -Version ($versionNumber -replace '-.*$', '')
     Assert-LastCommandSucceeded "Publish failed"
 
     $resolvedOutputDir = if ([IO.Path]::IsPathRooted($OutputDir)) {
